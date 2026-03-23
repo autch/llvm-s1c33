@@ -3063,6 +3063,19 @@ does not insert a SEI instruction.
   }];
 }
 
+def S1C33InterruptHandlerDocs : Documentation {
+  let Category = DocCatFunction;
+  let Heading = "interrupt_handler (S1C33)";
+  let Content = [{
+Clang supports the GNU style ``__attribute__((interrupt_handler))`` attribute on
+S1C33 targets. This attribute may be attached to a function definition and
+instructs the backend to generate an interrupt service routine prologue
+(``pushn %r15``) and epilogue (``popn %r15`` + ``reti``) so that all registers
+are saved/restored and the function returns via the return-from-interrupt
+instruction.
+  }];
+}
+
 def AVRSignalDocs : Documentation {
   let Category = DocCatFunction;
   let Content = [{

@@ -77,6 +77,13 @@ public:
                            llvm::opt::ArgStringList &CC1Args) const override;
   std::string computeSysRoot() const override;
   std::string getCompilerRTPath() const override;
+  const char *getDefaultLinker() const override {
+    // S1C33 is only supported by lld; use it by default so users do not
+    // need to pass -fuse-ld=lld explicitly.
+    if (getTriple().getArch() == llvm::Triple::s1c33)
+      return "ld.lld";
+    return "ld";
+  }
   SanitizerMask getSupportedSanitizers() const override;
 
   SmallVector<std::string>

@@ -55,6 +55,7 @@
 #include "clang/Sema/SemaOpenCL.h"
 #include "clang/Sema/SemaOpenMP.h"
 #include "clang/Sema/SemaRISCV.h"
+#include "clang/Sema/SemaS1C33.h"
 #include "clang/Sema/SemaSYCL.h"
 #include "clang/Sema/SemaSwift.h"
 #include "clang/Sema/SemaWasm.h"
@@ -7272,6 +7273,9 @@ ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D, const ParsedAttr &AL,
     break;
   case ParsedAttr::AT_AVRSignal:
     S.AVR().handleSignalAttr(D, AL);
+    break;
+  case ParsedAttr::AT_S1C33InterruptHandler:
+    S.S1C33().handleInterruptHandlerAttr(D, AL);
     break;
   case ParsedAttr::AT_BPFPreserveAccessIndex:
     S.BPF().handlePreserveAccessIndexAttr(D, AL);

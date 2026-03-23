@@ -651,6 +651,12 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       if (IsStaticPIE)
         crt = "rcrt1.o";
       CmdArgs.push_back(Args.MakeArgString(TC.GetFilePath(crt)));
+      // S1C33/P/ECE: crti.o (defnotify default handler) follows crt0.o.
+      if (Triple.getArch() == llvm::Triple::s1c33) {
+        std::string CrtiPath = TC.GetFilePath("crti.o");
+        if (TC.getDriver().getVFS().exists(CrtiPath))
+          CmdArgs.push_back(Args.MakeArgString(CrtiPath));
+      }
     }
     if (TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D)) {
       auto RuntimeLib = TC.GetRuntimeLibType(Args);
@@ -670,6 +676,15 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       }
       CmdArgs.push_back(Args.MakeArgString(TC.GetFilePath(CRTBegin)));
     }
+  }
+
+  // S1C33: inject default linker script if the user did not supply -T.
+  if (Triple.getArch() == llvm::Triple::s1c33 &&
+      !Args.hasArg(options::OPT_T_Group)) {
+    SmallString<128> DefaultLD(TC.computeSysRoot());
+    llvm::sys::path::append(DefaultLD, "lib", "piece.ld");
+    if (TC.getDriver().getVFS().exists(DefaultLD))
+      CmdArgs.push_back(Args.MakeArgString("-T" + DefaultLD));
   }
 
   Args.addAllArgs(CmdArgs,
@@ -699,13 +714,29 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
-    CmdArgs.push_back("--start-group");
-    AddRunTimeLibs(TC, D, CmdArgs, Args);
-    if (!Args.hasArg(options::OPT_nolibc))
-      CmdArgs.push_back("-lc");
-    if (TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D))
-      CmdArgs.push_back("-lgloss");
-    CmdArgs.push_back("--end-group");
+    if (Triple.getArch() == llvm::Triple::s1c33) {
+      // P/ECE SDK default libraries in the canonical link order.
+      // Using --start-group/--end-group to handle circular references between
+      // libraries (e.g. libio calls libstring, liblib calls libmath).
+      CmdArgs.push_back("--start-group");
+      CmdArgs.push_back("-lpceapi");
+      CmdArgs.push_back("-lio");
+      CmdArgs.push_back("-llib");
+      CmdArgs.push_back("-lmath");
+      CmdArgs.push_back("-lstring");
+      CmdArgs.push_back("-lctype");
+      CmdArgs.push_back("-lfp");
+      CmdArgs.push_back("-lidiv");
+      CmdArgs.push_back("--end-group");
+    } else {
+      CmdArgs.push_back("--start-group");
+      AddRunTimeLibs(TC, D, CmdArgs, Args);
+      if (!Args.hasArg(options::OPT_nolibc))
+        CmdArgs.push_back("-lc");
+      if (TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D))
+        CmdArgs.push_back("-lgloss");
+      CmdArgs.push_back("--end-group");
+    }
   }
 
   if ((TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D)) &&

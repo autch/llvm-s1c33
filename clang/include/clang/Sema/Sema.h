@@ -177,6 +177,7 @@ class SemaOpenMP;
 class SemaPPC;
 class SemaPseudoObject;
 class SemaRISCV;
+class SemaS1C33;
 class SemaSPIRV;
 class SemaSYCL;
 class SemaSwift;
@@ -1520,6 +1521,11 @@ public:
     return *RISCVPtr;
   }
 
+  SemaS1C33 &S1C33() {
+    assert(S1C33Ptr);
+    return *S1C33Ptr;
+  }
+
   SemaSPIRV &SPIRV() {
     assert(SPIRVPtr);
     return *SPIRVPtr;
@@ -1603,6 +1609,7 @@ private:
   std::unique_ptr<SemaPPC> PPCPtr;
   std::unique_ptr<SemaPseudoObject> PseudoObjectPtr;
   std::unique_ptr<SemaRISCV> RISCVPtr;
+  std::unique_ptr<SemaS1C33> S1C33Ptr;
   std::unique_ptr<SemaSPIRV> SPIRVPtr;
   std::unique_ptr<SemaSYCL> SYCLPtr;
   std::unique_ptr<SemaSwift> SwiftPtr;

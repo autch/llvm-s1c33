@@ -476,6 +476,7 @@ def TargetMips32 : TargetArch<["mips", "mipsel"]>;
 def TargetAnyMips : TargetArch<["mips", "mipsel", "mips64", "mips64el"]>;
 def TargetMSP430 : TargetArch<["msp430"]>;
 def TargetM68k : TargetArch<["m68k"]>;
+def TargetS1C33 : TargetArch<["s1c33"]>;
 def TargetRISCV : TargetArch<["riscv32", "riscv64"]>;
 def TargetX86 : TargetArch<["x86"]>;
 def TargetX86_64 : TargetArch<["x86_64"]>;
@@ -2168,6 +2169,12 @@ def MSP430Interrupt : InheritableAttr, TargetSpecificAttr<TargetMSP430> {
   let ParseKind = "Interrupt";
   let HasCustomParsing = 1;
   let Documentation = [Undocumented];
+}
+
+def S1C33InterruptHandler : InheritableAttr, TargetSpecificAttr<TargetS1C33> {
+  let Spellings = [GCC<"interrupt_handler">];
+  let Subjects = SubjectList<[Function]>;
+  let Documentation = [S1C33InterruptHandlerDocs];
 }
 
 def Mips16 : InheritableAttr, TargetSpecificAttr<TargetMips32> {

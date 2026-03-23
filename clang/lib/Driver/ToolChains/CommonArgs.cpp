@@ -639,6 +639,8 @@ const char *tools::getLDMOption(const llvm::Triple &T, const ArgList &Args) {
     return "elf64ve";
   case llvm::Triple::csky:
     return "cskyelf_linux";
+  case llvm::Triple::s1c33:
+    return "elf32ls1c33";
   default:
     return nullptr;
   }

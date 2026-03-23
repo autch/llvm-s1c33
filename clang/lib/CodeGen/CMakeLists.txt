@@ -144,6 +144,7 @@ add_clang_library(clangCodeGen
   Targets/M68k.cpp
   Targets/MSP430.cpp
   Targets/Mips.cpp
+  Targets/S1C33.cpp
   Targets/NVPTX.cpp
   Targets/PPC.cpp
   Targets/RISCV.cpp

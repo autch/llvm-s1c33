@@ -26,6 +26,7 @@
 #include "Targets/LoongArch.h"
 #include "Targets/M68k.h"
 #include "Targets/MSP430.h"
+#include "Targets/S1C33.h"
 #include "Targets/Mips.h"
 #include "Targets/NVPTX.h"
 #include "Targets/OSTargets.h"
@@ -130,6 +131,9 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
 
   case llvm::Triple::lanai:
     return std::make_unique<LanaiTargetInfo>(Triple, Opts);
+
+  case llvm::Triple::s1c33:
+    return std::make_unique<S1C33TargetInfo>(Triple, Opts);
 
   case llvm::Triple::aarch64_32:
     if (Triple.isOSDarwin())

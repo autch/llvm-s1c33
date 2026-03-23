@@ -554,6 +554,9 @@ createMSP430TargetCodeGenInfo(CodeGenModule &CGM);
 std::unique_ptr<TargetCodeGenInfo>
 createNVPTXTargetCodeGenInfo(CodeGenModule &CGM);
 
+std::unique_ptr<TargetCodeGenInfo>
+createS1C33TargetCodeGenInfo(CodeGenModule &CGM);
+
 enum class PPC64_SVR4_ABIKind {
   ELFv1 = 0,
   ELFv2,

@@ -81,6 +81,7 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
   case tcele:          return "tcele";
   case thumb:          return "thumb";
   case thumbeb:        return "thumbeb";
+  case s1c33:          return "s1c33";
   case ve:             return "ve";
   case wasm32:         return "wasm32";
   case wasm64:         return "wasm64";
@@ -250,6 +251,7 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
   case riscv64be:
     return "riscv";
 
+  case s1c33:       return "s1c33";
   case ve:          return "ve";
   case csky:        return "csky";
 
@@ -518,6 +520,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
       .Case("loongarch64", loongarch64)
       .Case("dxil", dxil)
       .Case("xtensa", xtensa)
+      .Case("s1c33", s1c33)
       .Default(UnknownArch);
 }
 
@@ -670,6 +673,7 @@ static Triple::ArchType parseArch(StringRef ArchName) {
                   "dxilv1.9"},
                  Triple::dxil)
           .Case("xtensa", Triple::xtensa)
+          .Case("s1c33", Triple::s1c33)
           .Default(Triple::UnknownArch);
 
   // Some architectures require special parsing logic just to compute the
@@ -998,6 +1002,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::hsail:
   case Triple::kalimba:
   case Triple::lanai:
+  case Triple::s1c33:
   case Triple::loongarch32:
   case Triple::loongarch64:
   case Triple::m68k:
@@ -1731,6 +1736,7 @@ unsigned Triple::getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::kalimba:
   case llvm::Triple::lanai:
   case llvm::Triple::loongarch32:
+  case llvm::Triple::s1c33:
   case llvm::Triple::m68k:
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
@@ -1841,6 +1847,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::kalimba:
   case Triple::lanai:
   case Triple::loongarch32:
+  case Triple::s1c33:
   case Triple::m68k:
   case Triple::mips:
   case Triple::mipsel:
@@ -1909,6 +1916,7 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::hexagon:
   case Triple::kalimba:
   case Triple::lanai:
+  case Triple::s1c33:
   case Triple::m68k:
   case Triple::msp430:
   case Triple::r600:
@@ -2360,6 +2368,7 @@ ExceptionHandling Triple::getDefaultExceptionHandling() const {
   case Triple::lanai:
   case Triple::m68k:
   case Triple::msp430:
+  case Triple::s1c33:
   case Triple::systemz:
   case Triple::xcore:
   case Triple::xtensa:

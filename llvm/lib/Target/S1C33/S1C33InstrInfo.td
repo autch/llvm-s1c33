@@ -167,6 +167,13 @@ def shiftimm : Operand<i32> {
   let ParserMatchClass = ShiftImm8AsmOperand;
 }
 
+// 13-bit signed immediate for ext+[%rb] offset addressing (single ext, [-4096, 4095]).
+// OPERAND_IMMEDIATE ensures the SelectionDAG ISel folds matching constants as TargetConstant
+// (not materializing them as registers).
+def simm13 : Operand<i32> {
+  let OperandType = "OPERAND_IMMEDIATE";
+}
+
 
 //===----------------------------------------------------------------------===//
 // Predicates for immediate values
@@ -175,6 +182,8 @@ def shiftimm : Operand<i32> {
 def immSExt6  : PatLeaf<(imm), [{ return isInt<6>(N->getSExtValue()); }]>;
 def immZExt6  : PatLeaf<(imm), [{ return isUInt<6>(N->getZExtValue()); }]>;
 def immZExt10 : PatLeaf<(imm), [{ return isUInt<10>(N->getZExtValue()); }]>;
+// 13-bit signed immediate for ext+[%rb] offset addressing (single ext, [-4096, 4095]).
+def immSExt13 : PatLeaf<(imm), [{ return isInt<13>(N->getSExtValue()); }]>;
 // Shift immediate: 1-8 (4-bit field; 0 is a no-op, 1xxx=8).
 // Shifts cannot use ext prefix — max encodable count is 8.
 def immShift8 : PatLeaf<(imm), [{ return N->getZExtValue() >= 1 && N->getZExtValue() <= 8; }]>;
@@ -189,6 +198,13 @@ def negImmToUImm6 : PatLeaf<(imm), [{
 // SDNodeXForm: negate a constant (for negImmToUImm6 → uimm6 conversion).
 def NegImm : SDNodeXForm<imm, [{
   return CurDAG->getTargetConstant(-N->getSExtValue(), SDLoc(N), MVT::i32);
+}]>;
+
+// SDNodeXForm: identity conversion of an imm to a fresh TargetConstant.
+// Used in standalone Pat<> patterns to avoid shared Constant nodes getting replaced
+// by a materialized register when the same constant is used elsewhere in the DAG.
+def ImmAsTarget : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(N->getSExtValue(), SDLoc(N), MVT::i32);
 }]>;
 
 //===----------------------------------------------------------------------===//
@@ -599,6 +615,43 @@ let mayLoad = 1, hasSideEffects = 1 in {
 }
 
 //===----------------------------------------------------------------------===//
+// Register-indirect with offset (ext+[%rb]) pseudos.
+//
+// Each pseudo expands in expandPostRAPseudo to: ext $off; ld.x [$rb].
+// The offset is 13-bit signed (single ext), covering [-4096, 4095] bytes.
+// DAG patterns are added at the bottom of this file.
+//===----------------------------------------------------------------------===//
+
+let hasSideEffects = 0, mayLoad = 1 in {
+  def LDB_ri_off  : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
+      "# ld.b\t$rd, [$rb+$off]",
+      [(set GR32:$rd, (sextloadi8  (add GR32:$rb, immSExt13:$off)))]>;
+  def LDUB_ri_off : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
+      "# ld.ub\t$rd, [$rb+$off]",
+      [(set GR32:$rd, (zextloadi8  (add GR32:$rb, immSExt13:$off)))]>;
+  def LDH_ri_off  : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
+      "# ld.h\t$rd, [$rb+$off]",
+      [(set GR32:$rd, (sextloadi16 (add GR32:$rb, immSExt13:$off)))]>;
+  def LDUH_ri_off : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
+      "# ld.uh\t$rd, [$rb+$off]",
+      [(set GR32:$rd, (zextloadi16 (add GR32:$rb, immSExt13:$off)))]>;
+  def LDW_ri_off  : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
+      "# ld.w\t$rd, [$rb+$off]",
+      [(set GR32:$rd, (load         (add GR32:$rb, immSExt13:$off)))]>;
+}
+let hasSideEffects = 0, mayStore = 1 in {
+  def STB_ri_off  : S1C33Pseudo<(outs), (ins GR32:$rb, simm13:$off, GR32:$rs),
+      "# ld.b\t[$rb+$off], $rs",
+      [(truncstorei8  GR32:$rs, (add GR32:$rb, immSExt13:$off))]>;
+  def STH_ri_off  : S1C33Pseudo<(outs), (ins GR32:$rb, simm13:$off, GR32:$rs),
+      "# ld.h\t[$rb+$off], $rs",
+      [(truncstorei16 GR32:$rs, (add GR32:$rb, immSExt13:$off))]>;
+  def STW_ri_off  : S1C33Pseudo<(outs), (ins GR32:$rb, simm13:$off, GR32:$rs),
+      "# ld.w\t[$rb+$off], $rs",
+      [(store         GR32:$rs, (add GR32:$rb, immSExt13:$off))]>;
+}
+
+//===----------------------------------------------------------------------===//
 // CLASS 1 — Register-register ALU
 //
 // Encoding: |001|op1(3)|10(2)|rs(4)|rd(4)|
@@ -912,28 +965,34 @@ let Defs = [PSR], hasSideEffects = 0, Constraints = "$rd = $rs1" in {
 // CLASS 4 — Special register ops (scan/swap/mirror)
 //
 // Encoding: |100|op1(3)|10(2)|rs(4)|rd(4)|
+//
+// Verified op1 values (confirmed by user, 2026-03-24):
+//   scan0: op1=010
+//   scan1: op1=011
+//   swap:  op1=100 (verified: 'swap %r5,%r13' → 0x92D5 in memset.o)
+//   mirror: op1=101
 //===----------------------------------------------------------------------===//
 
 let hasSideEffects = 0 in {
-  // scan0 %rd, %rs  scan first 0 from MSB (op1=000, op2=10)
-  def SCAN0 : S1C33InstC4Reg2<0b000, 0b10,
+  // scan0 %rd, %rs  scan first 0 from MSB (op1=010, op2=10)
+  def SCAN0 : S1C33InstC4Reg2<0b010, 0b10,
       (outs GR32:$rd), (ins GR32:$rs),
       "scan0\t$rd, $rs", []>;
 
-  // scan1 %rd, %rs  scan first 1 from MSB (op1=001, op2=10)
-  def SCAN1 : S1C33InstC4Reg2<0b001, 0b10,
+  // scan1 %rd, %rs  scan first 1 from MSB (op1=011, op2=10)
+  def SCAN1 : S1C33InstC4Reg2<0b011, 0b10,
       (outs GR32:$rd), (ins GR32:$rs),
       "scan1\t$rd, $rs",
       [(set GR32:$rd, (ctlz GR32:$rs))]>;
 
-  // swap %rd, %rs   swap upper/lower 16 bits (op1=010, op2=10)
-  // Note: semantics from CPU manual - swaps the two halfwords in rd.
-  def SWAP : S1C33InstC4Reg2<0b010, 0b10,
+  // swap %rd, %rs   swap upper/lower 16 bits (op1=100, op2=10)
+  // Note: semantics from CPU manual - swaps the two halfwords of %rs into %rd.
+  def SWAP : S1C33InstC4Reg2<0b100, 0b10,
       (outs GR32:$rd), (ins GR32:$rs),
       "swap\t$rd, $rs", []>;
 
-  // mirror %rd, %rs  bit reversal (op1=011, op2=10)
-  def MIRROR : S1C33InstC4Reg2<0b011, 0b10,
+  // mirror %rd, %rs  bit reversal (op1=101, op2=10)
+  def MIRROR : S1C33InstC4Reg2<0b101, 0b10,
       (outs GR32:$rd), (ins GR32:$rs),
       "mirror\t$rd, $rs",
       [(set GR32:$rd, (bitreverse GR32:$rs))]>;
@@ -950,37 +1009,38 @@ let hasSideEffects = 0 in {
 
 // div0s/div0u initialize the divide step sequence.
 // div1/div2s/div3s are 2-address (rd modified in place).
+// op1 values confirmed by user 2026-03-24.
 let hasSideEffects = 1, Defs = [PSR] in {
-  // div0s %rd, %rs  setup signed divide (op1=000, op2=11)
-  def DIV0S : S1C33InstC4Reg2<0b000, 0b11,
+  // div0s %rd, %rs  setup signed divide (op1=010, op2=11)
+  def DIV0S : S1C33InstC4Reg2<0b010, 0b11,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
       "div0s\t$rd, $rs", []> {
     let Constraints = "$rd = $rs1";
   }
 
-  // div0u %rd, %rs  setup unsigned divide (op1=001, op2=11)
-  def DIV0U : S1C33InstC4Reg2<0b001, 0b11,
+  // div0u %rd, %rs  setup unsigned divide (op1=011, op2=11)
+  def DIV0U : S1C33InstC4Reg2<0b011, 0b11,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
       "div0u\t$rd, $rs", []> {
     let Constraints = "$rd = $rs1";
   }
 
-  // div1 %rd, %rs   divide step (op1=010, op2=11)
-  def DIV1 : S1C33InstC4Reg2<0b010, 0b11,
+  // div1 %rd, %rs   divide step (op1=100, op2=11)
+  def DIV1 : S1C33InstC4Reg2<0b100, 0b11,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
       "div1\t$rd, $rs", []> {
     let Constraints = "$rd = $rs1";
   }
 
-  // div2s %rd, %rs  signed divide adjust (op1=011, op2=11)
-  def DIV2S : S1C33InstC4Reg2<0b011, 0b11,
+  // div2s %rd, %rs  signed divide adjust (op1=101, op2=11)
+  def DIV2S : S1C33InstC4Reg2<0b101, 0b11,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
       "div2s\t$rd, $rs", []> {
     let Constraints = "$rd = $rs1";
   }
 
-  // div3s %rd, %rs  signed divide finalize (op1=100, op2=11)
-  def DIV3S : S1C33InstC4Reg2<0b100, 0b11,
+  // div3s %rd, %rs  signed divide finalize (op1=110, op2=11)
+  def DIV3S : S1C33InstC4Reg2<0b110, 0b11,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
       "div3s\t$rd, $rs", []> {
     let Constraints = "$rd = $rs1";
@@ -1028,6 +1088,9 @@ def MOV_ri32 : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$imm32),
     "# MOV_ri32 $rd, $imm32",
     [(set GR32:$rd, imm:$imm32)]> {
   let isMoveImm = 1;
+  let hasSideEffects = 0;
+  let mayLoad = 0;
+  let mayStore = 0;
 }
 
 // ALU_ri32 pseudos — 2-address immediate ALU for constants beyond imm6 range.
@@ -1094,36 +1157,45 @@ def : Pat<(store GR32:$rs, (S1C33Wrapper tglobaladdr:$sym)),
 def : Pat<(store GR32:$rs, (S1C33Wrapper texternalsym:$sym)),
           (STW_ri (LDW_SYM_EXT0 texternalsym:$sym), GR32:$rs)>;
 
+// Register-indirect with offset patterns: (load/store (add %rb, imm13)) → ext+ld.x [%rb]
+// These are selected as Lxx_ri_off pseudos and expanded to ext+Lxx_ri in expandPostRAPseudo.
+// Primary patterns are inline in the instruction definitions above.
+// Additional patterns for "any-extend" loads (map to unsigned variants).
+// ImmAsTarget wraps the offset in a fresh TargetConstant to avoid node-sharing issues
+// where a shared Constant gets replaced by a materialized register.
+def : Pat<(extloadi8  (add GR32:$rb, immSExt13:$off)), (LDUB_ri_off GR32:$rb, (ImmAsTarget $off))>;
+def : Pat<(extloadi16 (add GR32:$rb, immSExt13:$off)), (LDUH_ri_off GR32:$rb, (ImmAsTarget $off))>;
+
 //===----------------------------------------------------------------------===//
 // CLASS 5 — Special register transfers (op2=00)
 //
 // CPU Manual §4.2 Class 5 table, op2=00:
 //   ld.w %sd, %rs  op1=000 — write GPR to special reg (sd in bits[3:0])
 //   ld.w %rd, %ss  op1=001 — read special reg to GPR  (ss in bits[7:4])
-//   adc  %rd, %rs  op1=010 — add with carry (rd += rs + C)
-//   sbc  %rd, %rs  op1=011 — subtract with carry (rd -= rs + ~C)
+//   adc  %rd, %rs  op1=110 — add with carry (rd += rs + C)
+//   sbc  %rd, %rs  op1=111 — subtract with carry (rd -= rs + ~C)
 //
-// Special register codes: sp=0, psr=1, alr=2, ahr=3
+// Special register codes: psr=0, sp=1, alr=2, ahr=3
 //===----------------------------------------------------------------------===//
 
 // --- Write GPR to special register (op1=000, op2=00) ---
 
 // ld.w %sp, %rs — write GPR to SP
-// Encoding: 0xA000|(rs<<4)|0
+// Encoding: 0xA000|(rs<<4)|1
 let hasSideEffects = 1, Defs = [SP] in
 def STW_to_SP : S1C33InstC5Reg2<0b000, 0b00,
     (outs), (ins GR32:$rs),
     "ld.w\t%sp, $rs", []> {
-  let rd = 0b0000;  // sd=0 (SP) hardcoded in bits[3:0]
+  let rd = 0b0001;  // sd=1 (SP) hardcoded in bits[3:0]
 }
 
 // ld.w %psr, %rs — write GPR to PSR (flags register)
-// Encoding: 0xA000|(rs<<4)|1
+// Encoding: 0xA000|(rs<<4)|0
 let hasSideEffects = 1, Defs = [PSR] in
 def STW_to_PSR : S1C33InstC5Reg2<0b000, 0b00,
     (outs), (ins GR32:$rs),
     "ld.w\t%psr, $rs", []> {
-  let rd = 0b0001;  // sd=1 (PSR) hardcoded in bits[3:0]
+  let rd = 0b0000;  // sd=0 (PSR) hardcoded in bits[3:0]
 }
 
 // ld.w %alr, %rs — write GPR to ALR (accumulator low)
@@ -1147,21 +1219,21 @@ def STW_to_AHR : S1C33InstC5Reg2<0b000, 0b00,
 // --- Read special register to GPR (op1=001, op2=00) ---
 
 // ld.w %rd, %sp — read SP into GPR
-// Encoding: 0xA400|0|rd  (ss=0 in bits[7:4])
+// Encoding: 0xA400|0x10|rd  (ss=1 in bits[7:4])
 let hasSideEffects = 0, Uses = [SP] in
 def LDW_from_SP : S1C33InstC5Reg2<0b001, 0b00,
     (outs GR32:$rd), (ins),
     "ld.w\t$rd, %sp", []> {
-  let rs = 0b0000;  // ss=0 (SP) hardcoded in bits[7:4]
+  let rs = 0b0001;  // ss=1 (SP) hardcoded in bits[7:4]
 }
 
 // ld.w %rd, %psr — read PSR into GPR
-// Encoding: 0xA400|0x10|rd  (ss=1 in bits[7:4])
+// Encoding: 0xA400|0|rd  (ss=0 in bits[7:4])
 let hasSideEffects = 0, Uses = [PSR] in
 def LDW_from_PSR : S1C33InstC5Reg2<0b001, 0b00,
     (outs GR32:$rd), (ins),
     "ld.w\t$rd, %psr", []> {
-  let rs = 0b0001;  // ss=1 (PSR) hardcoded in bits[7:4]
+  let rs = 0b0000;  // ss=0 (PSR) hardcoded in bits[7:4]
 }
 
 // ld.w %rd, %alr — read ALR (multiply/divide low result) into GPR
@@ -1184,17 +1256,17 @@ def LDW_from_AHR : S1C33InstC5Reg2<0b001, 0b00,
   let rs = 0b0011;  // ss=3 (AHR) hardcoded in bits[7:4]
 }
 
-// --- Add/subtract with carry (op1=010/011, op2=00) ---
+// --- Add/subtract with carry (op1=110/111, op2=00) ---
 
 let Defs = [PSR], Uses = [PSR], hasSideEffects = 0,
     Constraints = "$rd = $rs1" in {
-  // adc %rd, %rs — add with carry: rd += rs + C  (op1=010)
-  def ADC_rr : S1C33InstC5Reg2<0b010, 0b00,
+  // adc %rd, %rs — add with carry: rd += rs + C  (op1=110)
+  def ADC_rr : S1C33InstC5Reg2<0b110, 0b00,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
       "adc\t$rd, $rs", []>;
 
-  // sbc %rd, %rs — subtract with carry: rd -= rs + ~C  (op1=011)
-  def SBC_rr : S1C33InstC5Reg2<0b011, 0b00,
+  // sbc %rd, %rs — subtract with carry: rd -= rs + ~C  (op1=111)
+  def SBC_rr : S1C33InstC5Reg2<0b111, 0b00,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
       "sbc\t$rd, $rs", []>;
 }
@@ -1203,10 +1275,14 @@ let Defs = [PSR], Uses = [PSR], hasSideEffects = 0,
 // CLASS 5 — Register-to-register narrow loads (op2=01)
 //
 // CPU Manual §4.2 Class 5 table, op2=01:
-//   ld.b  %rd, %rs  op1=100 — sign-extend byte    (bits[7:0] of rs → rd)
-//   ld.ub %rd, %rs  op1=101 — zero-extend byte    (bits[7:0] of rs → rd)
-//   ld.h  %rd, %rs  op1=110 — sign-extend halfword (bits[15:0] of rs → rd)
-//   ld.uh %rd, %rs  op1=111 — zero-extend halfword (bits[15:0] of rs → rd)
+//   ld.b  %rd, %rs  op1=000 — sign-extend byte    (bits[7:0] of rs → rd)
+//   ld.ub %rd, %rs  op1=001 — zero-extend byte    (bits[7:0] of rs → rd)
+//   ld.h  %rd, %rs  op1=010 — sign-extend halfword (bits[15:0] of rs → rd)
+//   ld.uh %rd, %rs  op1=011 — zero-extend halfword (bits[15:0] of rs → rd)
+//
+// NOTE: The correct op1 values are 000-011, NOT 100-111.
+//       Verified against EPSON as33 output: ld.ub %r13,%r13 → 0xA5DD
+//       (class=101, op1=001, op2=01, rs=r13, rd=r13).
 //
 // These differ from Class 1 register-indirect loads ([%rb]) in that the
 // source is a register, not a memory address.
@@ -1215,26 +1291,26 @@ let Defs = [PSR], Uses = [PSR], hasSideEffects = 0,
 
 // Register-to-register narrow loads do NOT update PSR flags (CPU Manual QR).
 let hasSideEffects = 0 in {
-  // ld.b %rd, %rs   sign-extend byte in rs into rd (op1=100, op2=01)
-  def LDB_rr  : S1C33InstC5Reg2<0b100, 0b01,
+  // ld.b %rd, %rs   sign-extend byte in rs into rd (op1=000, op2=01)
+  def LDB_rr  : S1C33InstC5Reg2<0b000, 0b01,
       (outs GR32:$rd), (ins GR32:$rs),
       "ld.b\t$rd, $rs",
       [(set GR32:$rd, (sext_inreg GR32:$rs, i8))]>;
 
-  // ld.ub %rd, %rs  zero-extend byte in rs into rd (op1=101, op2=01)
-  def LDUB_rr : S1C33InstC5Reg2<0b101, 0b01,
+  // ld.ub %rd, %rs  zero-extend byte in rs into rd (op1=001, op2=01)
+  def LDUB_rr : S1C33InstC5Reg2<0b001, 0b01,
       (outs GR32:$rd), (ins GR32:$rs),
       "ld.ub\t$rd, $rs",
       [(set GR32:$rd, (and GR32:$rs, (i32 255)))]>;
 
-  // ld.h %rd, %rs   sign-extend halfword in rs into rd (op1=110, op2=01)
-  def LDH_rr  : S1C33InstC5Reg2<0b110, 0b01,
+  // ld.h %rd, %rs   sign-extend halfword in rs into rd (op1=010, op2=01)
+  def LDH_rr  : S1C33InstC5Reg2<0b010, 0b01,
       (outs GR32:$rd), (ins GR32:$rs),
       "ld.h\t$rd, $rs",
       [(set GR32:$rd, (sext_inreg GR32:$rs, i16))]>;
 
-  // ld.uh %rd, %rs  zero-extend halfword in rs into rd (op1=111, op2=01)
-  def LDUH_rr : S1C33InstC5Reg2<0b111, 0b01,
+  // ld.uh %rd, %rs  zero-extend halfword in rs into rd (op1=011, op2=01)
+  def LDUH_rr : S1C33InstC5Reg2<0b011, 0b01,
       (outs GR32:$rd), (ins GR32:$rs),
       "ld.uh\t$rd, $rs",
       [(set GR32:$rd, (and GR32:$rs, (i32 65535)))]>;
@@ -1244,10 +1320,10 @@ let hasSideEffects = 0 in {
 // CLASS 5 — Bit operations (btst/bclr/bset/bnot)
 //
 // Format: |101|op1(3)|00(2)|rb(4)|0|imm3(3)|
-//   op1=100: btst (bit test  → PSR.Z = ~bit[imm3] of B[rb])
-//   op1=101: bclr (bit clear → B[rb] &= ~(1<<imm3))
-//   op1=110: bset (bit set   → B[rb] |=  (1<<imm3))
-//   op1=111: bnot (bit invert→ B[rb] ^=  (1<<imm3))
+//   op1=010: btst (bit test  → PSR.Z = ~bit[imm3] of B[rb])
+//   op1=011: bclr (bit clear → B[rb] &= ~(1<<imm3))
+//   op1=100: bset (bit set   → B[rb] |=  (1<<imm3))
+//   op1=101: bnot (bit invert→ B[rb] ^=  (1<<imm3))
 //
 // These are MEMORY operations: rb is an address register (not modified).
 // The byte at memory address rb is read (and for bclr/bset/bnot, written).
@@ -1262,25 +1338,25 @@ def uimm3 : Operand<i32> {
 
 // btst [%rb], imm3 — bit test: PSR.Z = ~bit[imm3] of B[rb]  (memory read)
 let Defs = [PSR], mayLoad = 1, hasSideEffects = 0 in
-def BTST : S1C33InstC5BitOp<0b100,
+def BTST : S1C33InstC5BitOp<0b010,
     (outs), (ins GR32:$rb, uimm3:$imm3),
     "btst\t[$rb], $imm3", []>;
 
 // bclr [%rb], imm3 — bit clear: B[rb] &= ~(1<<imm3)  (memory read-modify-write)
 let mayLoad = 1, mayStore = 1, hasSideEffects = 0 in
-def BCLR : S1C33InstC5BitOp<0b101,
+def BCLR : S1C33InstC5BitOp<0b011,
     (outs), (ins GR32:$rb, uimm3:$imm3),
     "bclr\t[$rb], $imm3", []>;
 
 // bset [%rb], imm3 — bit set: B[rb] |= (1<<imm3)  (memory read-modify-write)
 let mayLoad = 1, mayStore = 1, hasSideEffects = 0 in
-def BSET : S1C33InstC5BitOp<0b110,
+def BSET : S1C33InstC5BitOp<0b100,
     (outs), (ins GR32:$rb, uimm3:$imm3),
     "bset\t[$rb], $imm3", []>;
 
 // bnot [%rb], imm3 — bit invert: B[rb] ^= (1<<imm3)  (memory read-modify-write)
 let mayLoad = 1, mayStore = 1, hasSideEffects = 0 in
-def BNOT : S1C33InstC5BitOp<0b111,
+def BNOT : S1C33InstC5BitOp<0b101,
     (outs), (ins GR32:$rb, uimm3:$imm3),
     "bnot\t[$rb], $imm3", []>;
 
@@ -1292,6 +1368,7 @@ def BNOT : S1C33InstC5BitOp<0b111,
 //   mltu.h %rd, %rs  op1=001 op2=10  16×16→32-bit unsigned (ALR=result)
 //   mlt.w  %rd, %rs  op1=010 op2=10  32×32→64-bit signed   (AHR:ALR)
 //   mltu.w %rd, %rs  op1=011 op2=10  32×32→64-bit unsigned  (AHR:ALR)
+//   mac    %rs       op1=100 op2=10  AHR:ALR += %rs × ALR   (rd=0 fixed)
 //
 // For encoding: rs (multiplicand) at bits[7:4], rd (multiplier) at bits[3:0].
 // Both operands are sources; results go implicitly to ALR/AHR.
@@ -1327,6 +1404,17 @@ let Defs = [ALR, AHR], hasSideEffects = 0 in
 def MLTU_W : S1C33InstC5Reg2<0b011, 0b10,
     (outs), (ins GR32:$rs, GR32:$rd),
     "mltu.w\t$rd, $rs", []>;
+
+// mac %rs — multiply-accumulate: AHR:ALR += rd × rs  (op1=100, op2=10, rd=0000)
+// Class 5: op1=100, op2=10, rs in bits[7:4], rd=0000 (fixed)
+// AHR:ALR += (signed 32-bit %rs) × (value in ALR used as multiplier src)
+// CPU Manual §2.5.7: accumulates into AHR:ALR.
+let Defs = [ALR, AHR], Uses = [ALR, AHR], hasSideEffects = 0 in
+def MAC : S1C33InstC5Reg2<0b100, 0b10,
+    (outs), (ins GR32:$rs),
+    "mac\t$rs", []> {
+  let rd = 0b0000;  // rd field fixed to 0
+}
 
 //===----------------------------------------------------------------------===//
 // Multiply pseudo instructions

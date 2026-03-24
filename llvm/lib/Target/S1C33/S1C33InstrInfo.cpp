@@ -165,6 +165,57 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     MI.eraseFromParent();
     return true;
   }
+
+  // LDxx_ri_off / STxx_ri_off pseudos: expand to ext $off; ld.x [$rb].
+  // Offset is a 13-bit signed immediate supplied by the immSExt13 PatLeaf.
+  case S1C33::LDB_ri_off:
+  case S1C33::LDUB_ri_off:
+  case S1C33::LDH_ri_off:
+  case S1C33::LDUH_ri_off:
+  case S1C33::LDW_ri_off: {
+    Register Rd = MI.getOperand(0).getReg();
+    Register Rb = MI.getOperand(1).getReg();
+    int64_t  Off = MI.getOperand(2).getImm();
+
+    unsigned RealOpc;
+    switch (MI.getOpcode()) {
+    case S1C33::LDB_ri_off:  RealOpc = S1C33::LDB_ri;  break;
+    case S1C33::LDUB_ri_off: RealOpc = S1C33::LDUB_ri; break;
+    case S1C33::LDH_ri_off:  RealOpc = S1C33::LDH_ri;  break;
+    case S1C33::LDUH_ri_off: RealOpc = S1C33::LDUH_ri; break;
+    default:                 RealOpc = S1C33::LDW_ri;  break;
+    }
+    // Emit ext (if offset != 0) then the base load instruction.
+    if (Off != 0) {
+      int64_t ext_imm13 = Off & 0x1FFF;
+      BuildMI(MBB, MI, DL, get(S1C33::EXT)).addImm(ext_imm13);
+    }
+    BuildMI(MBB, MI, DL, get(RealOpc), Rd).addReg(Rb);
+    MI.eraseFromParent();
+    return true;
+  }
+
+  case S1C33::STB_ri_off:
+  case S1C33::STH_ri_off:
+  case S1C33::STW_ri_off: {
+    Register Rb  = MI.getOperand(0).getReg();
+    int64_t  Off = MI.getOperand(1).getImm();
+    Register Rs  = MI.getOperand(2).getReg();
+
+    unsigned RealOpc;
+    switch (MI.getOpcode()) {
+    case S1C33::STB_ri_off: RealOpc = S1C33::STB_ri; break;
+    case S1C33::STH_ri_off: RealOpc = S1C33::STH_ri; break;
+    default:                RealOpc = S1C33::STW_ri; break;
+    }
+    if (Off != 0) {
+      int64_t ext_imm13 = Off & 0x1FFF;
+      BuildMI(MBB, MI, DL, get(S1C33::EXT)).addImm(ext_imm13);
+    }
+    BuildMI(MBB, MI, DL, get(RealOpc)).addReg(Rb).addReg(Rs);
+    MI.eraseFromParent();
+    return true;
+  }
   }
 }
 

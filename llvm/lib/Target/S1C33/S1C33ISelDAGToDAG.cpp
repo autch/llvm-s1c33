@@ -168,6 +168,42 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
     return;
   }
 
+  case ISD::AND:
+  case ISD::OR:
+  case ISD::XOR: {
+    // For constants requiring two ext prefixes (outside ±2^18), split into:
+    //   MOV_ri32 %tmp, const    ← trivially loop-invariant
+    //   ANDxx_rr %rd, %tmp       ← in-loop register operation
+    // MachineLICM can then hoist the MOV_ri32 out of any enclosing loop.
+    // Constants in the ±2^18 range (single ext) fall through to AND_ri32 pseudo,
+    // which expands post-RA to "ext imm13; and %rd, imm6" — 2 instructions
+    // and suitable for single-use cases.
+    SDValue LHS = Node->getOperand(0);
+    SDValue RHS = Node->getOperand(1);
+    // Normalise: constant on RHS.
+    if (isa<ConstantSDNode>(LHS) && !isa<ConstantSDNode>(RHS))
+      std::swap(LHS, RHS);
+    auto *C = dyn_cast<ConstantSDNode>(RHS);
+    if (!C || isInt<19>(C->getSExtValue()))
+      break;
+
+    unsigned Opc;
+    switch (Node->getOpcode()) {
+    case ISD::AND: Opc = S1C33::AND_rr; break;
+    case ISD::OR:  Opc = S1C33::OR_rr;  break;
+    default:       Opc = S1C33::XOR_rr; break;
+    }
+
+    SDValue TargetImm =
+        CurDAG->getTargetConstant(C->getZExtValue(), DL, MVT::i32);
+    MachineSDNode *Mov =
+        CurDAG->getMachineNode(S1C33::MOV_ri32, DL, MVT::i32, TargetImm);
+    SDNode *Op =
+        CurDAG->getMachineNode(Opc, DL, MVT::i32, LHS, SDValue(Mov, 0));
+    ReplaceNode(Node, Op);
+    return;
+  }
+
   default:
     break;
   }

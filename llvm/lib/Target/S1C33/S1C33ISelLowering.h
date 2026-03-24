@@ -91,6 +91,15 @@ private:
   SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVACOPY(SDValue Op, SelectionDAG &DAG) const;
+
+  SDValue combineBRCC(SDNode *N, SelectionDAG &DAG) const;
+  SDValue combineSETCC(SDNode *N, SelectionDAG &DAG) const;
+
+public:
+  bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM,
+                              Type *Ty, unsigned AS,
+                              Instruction *I = nullptr) const override;
+  SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 };
 
 } // namespace llvm

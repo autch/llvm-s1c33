@@ -15,6 +15,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/ADT/SmallString.h"
 
 using namespace llvm;
 
@@ -64,6 +65,21 @@ void S1C33InstPrinter::printInst(const MCInst *MI, uint64_t Address,
 
   if (!printAliasInstr(MI, Address, O))
     printInstruction(MI, Address, O);
+
+  // For add/sub %sp, imm10 the immediate is a byte count.  Annotate with the
+  // equivalent word count (÷4) since EPSON's as33/gcc33 uses word units for
+  // SP arithmetic, making comparisons with legacy code easier.
+  if (Opc == S1C33::ADDSP_i || Opc == S1C33::SUBSP_i) {
+    int64_t Bytes = MI->getOperand(0).getImm();
+    SmallString<32> Buf;
+    raw_svector_ostream BOS(Buf);
+    BOS << Bytes / 4 << " words";
+    if (!Annot.empty())
+      BOS << "; " << Annot;
+    printAnnotation(O, BOS.str());
+    return;
+  }
+
   printAnnotation(O, Annot);
 }
 

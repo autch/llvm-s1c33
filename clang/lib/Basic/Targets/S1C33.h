@@ -81,7 +81,7 @@ public:
   std::string_view getClobbers() const override { return ""; }
 
   BuiltinVaListKind getBuiltinVaListKind() const override {
-    return TargetInfo::VoidPtrBuiltinVaList;
+    return TargetInfo::CharPtrBuiltinVaList;
   }
 
   bool hasBitIntType() const override { return true; }

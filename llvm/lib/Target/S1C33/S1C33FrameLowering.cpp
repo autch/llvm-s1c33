@@ -45,23 +45,27 @@ static const MCPhysReg CalleeSavedByIdx[] = {
     S1C33::R0, S1C33::R1, S1C33::R2, S1C33::R3};
 
 // Expand ADJCALLSTACKDOWN/UP pseudo instructions.
-// For stack-passed arguments (size > 0): emit sub/add %sp.
-// For register-only calls (size == 0): just delete the pseudo.
+// When hasReservedCallFrame() is true the prologue already includes space for
+// the maximum outgoing call frame, so we just erase the pseudo.  Otherwise
+// (e.g. with a frame pointer or variable-length arrays) we emit dynamic
+// sub/add %sp.
 MachineBasicBlock::iterator S1C33FrameLowering::eliminateCallFramePseudoInstr(
     MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator MI) const {
-  const S1C33Subtarget &STI = MF.getSubtarget<S1C33Subtarget>();
-  const S1C33InstrInfo &TII =
-      *static_cast<const S1C33InstrInfo *>(STI.getInstrInfo());
-  DebugLoc DL = MI->getDebugLoc();
-  unsigned Opcode = MI->getOpcode();
-  int64_t Amount = MI->getOperand(0).getImm();
+  if (!hasReservedCallFrame(MF)) {
+    const S1C33Subtarget &STI = MF.getSubtarget<S1C33Subtarget>();
+    const S1C33InstrInfo &TII =
+        *static_cast<const S1C33InstrInfo *>(STI.getInstrInfo());
+    DebugLoc DL = MI->getDebugLoc();
+    unsigned Opcode = MI->getOpcode();
+    int64_t Amount = MI->getOperand(0).getImm();
 
-  if (Amount != 0) {
-    if (Opcode == S1C33::ADJCALLSTACKDOWN)
-      BuildMI(MBB, MI, DL, TII.get(S1C33::SUBSP_i)).addImm(Amount);
-    else
-      BuildMI(MBB, MI, DL, TII.get(S1C33::ADDSP_i)).addImm(Amount);
+    if (Amount != 0) {
+      if (Opcode == S1C33::ADJCALLSTACKDOWN)
+        BuildMI(MBB, MI, DL, TII.get(S1C33::SUBSP_i)).addImm(Amount);
+      else
+        BuildMI(MBB, MI, DL, TII.get(S1C33::ADDSP_i)).addImm(Amount);
+    }
   }
   return MBB.erase(MI);
 }

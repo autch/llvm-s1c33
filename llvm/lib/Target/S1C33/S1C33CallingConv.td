@@ -11,7 +11,7 @@
 // Arguments: R12 → R13 → R14 → R15 (overflow to stack)
 // Return: R10 (32-bit), R10+R11 (64-bit)
 // Callee-saved: R0, R1, R2, R3
-// Reserved: R8 (GP), R9
+// Reserved: R8 (GP/kernel table base)
 //
 //===----------------------------------------------------------------------===//
 

@@ -22,7 +22,11 @@
 //             Note: this is NOT a MIPS-style user-data GP — the "GP optimization"
 //             (pointing R8 at user .sdata) is not implemented for user apps.
 //             Future: kernel startup code must explicitly set R8 = 0 in assembly.
-//   R9      : Reserved (NOT used as implicit scratch — see DESIGN_SPEC §5.2)
+//   R9      : Scratch (caller-saved), same as R4-R7.
+//             All P/ECE kernel interrupt handlers save/restore R0-R15 via
+//             pushn %r15 / popn %r15 (INT_BEGIN/INT_END macros), so R9 is
+//             safe to use as a scratch register.  pceapi stubs already treat
+//             R9 as caller-saved (ext33 ABI convention).
 //   R10     : Return value (32-bit / 64-bit low word)
 //   R11     : Return value (64-bit high word)
 //   R12–R15 : Arguments (up to 4 words)
@@ -63,10 +67,10 @@ def AHR : S1C33Reg<20, "ahr">, DwarfRegNum<[20]>;
 // GR32: Allocatable general-purpose registers.
 // Allocation order: caller-saved first (prefer spilling cheapest), then
 // callee-saved, then special-purpose (arg/retval registers) last.
-// R8 and R9 are excluded (reserved).
+// R8 is excluded (reserved: kernel table base pointer).
 def GR32 : RegisterClass<"S1C33", [i32], 32,
     (add // Scratch (caller-saved, free to use first)
-         R4, R5, R6, R7,
+         R4, R5, R6, R7, R9,
          // Callee-saved (allocate before arg/retval to preserve them)
          R0, R1, R2, R3,
          // Return value registers

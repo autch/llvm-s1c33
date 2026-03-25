@@ -51,8 +51,11 @@ S1C33RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   // read kernel function pointers via "ext N / ld.w %r9, [%r8]".
   // User-compiled code must never modify R8.  Reserved to enforce this.
   Reserved.set(S1C33::R8);
-  // R9: reserved — not used as implicit scratch (DESIGN_SPEC §5.2)
-  Reserved.set(S1C33::R9);
+  // R9: scratch (caller-saved), same as R4-R7.
+  // Safe because all P/ECE kernel interrupt handlers use pushn %r15 / popn %r15
+  // (INT_BEGIN/INT_END macros), which saves/restores R0-R15 including R9.
+  // pceapi stubs use R9 as caller-saved scratch (ext33 ABI convention), so
+  // treating R9 as caller-saved is ABI-compatible with SDK libraries.
   // Special registers are not allocatable.
   Reserved.set(S1C33::SP);
   Reserved.set(S1C33::PC);
@@ -105,8 +108,8 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     }
     assert(Offset >= 0 && "Negative SP-relative frame offset for ADJFI");
 
-    // Emit: ld.w Dst, SP  (MOV_rr Dst, SP)
-    BuildMI(MBB, II, DL, TII.get(S1C33::MOV_rr), Dst).addReg(S1C33::SP);
+    // Emit: ld.w Dst, %sp — CLASS 5 special register read (NOT MOV_rr)
+    BuildMI(MBB, II, DL, TII.get(S1C33::LDW_from_SP), Dst);
     if (Offset != 0) {
       // ADD_ri uses uimm6 (0..63); ext is needed only when Offset > 63.
       if (!isUInt<6>(Offset)) {
@@ -177,7 +180,7 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     int64_t TotalOffset = Offset + ExtraImm;
     assert(TotalOffset >= 0 && "Negative SP-relative offset in ADD_ri FI expansion");
 
-    BuildMI(MBB, II, DL, TII.get(S1C33::MOV_rr), Dst).addReg(S1C33::SP);
+    BuildMI(MBB, II, DL, TII.get(S1C33::LDW_from_SP), Dst);
     if (TotalOffset != 0) {
       // ADD_ri uses uimm6 (0..63); ext is needed only when TotalOffset > 63.
       if (!isUInt<6>(TotalOffset)) {

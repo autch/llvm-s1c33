@@ -30,7 +30,19 @@ void S1C33InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                   Register SrcReg, bool KillSrc,
                                   bool RenamableDest,
                                   bool RenamableSrc) const {
-  // ld.w %dest, %src — register-to-register copy.
+  // SP is a special register — use CLASS 5 transfers instead of CLASS 1 MOV.
+  if (SrcReg == S1C33::SP) {
+    // ld.w %rd, %sp — CLASS 5 special register read
+    BuildMI(MBB, I, DL, get(S1C33::LDW_from_SP), DestReg);
+    return;
+  }
+  if (DestReg == S1C33::SP) {
+    // ld.w %sp, %rs — CLASS 5 special register write
+    BuildMI(MBB, I, DL, get(S1C33::STW_to_SP))
+        .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  }
+  // ld.w %dest, %src — CLASS 1 register-to-register copy (GPR only).
   BuildMI(MBB, I, DL, get(S1C33::MOV_rr), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
 }

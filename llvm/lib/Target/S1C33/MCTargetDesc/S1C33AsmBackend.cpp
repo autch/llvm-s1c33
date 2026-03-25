@@ -65,19 +65,9 @@ public:
     MCFixupKind Kind = Fixup.getKind();
 
     // For unresolved fixups, record an ELF relocation so the linker patches
-    // the field.  For SHT_REL (HasRelAddend=false) the addend is stored in the
-    // section data, not in the relocation entry, so we must write it here
-    // before calling recordRelocation.
+    // the field.  With SHT_RELA the addend is stored in the relocation entry
+    // (r_addend), so we don't need to write it into the section data.
     if (!IsResolved) {
-      // FK_Data_4 → R_S1C33_32: 32-bit LE addend in data (e.g. function
-      // pointers in struct initialisers).  The linker applies:
-      //   *loc = sym_vma + in_data_addend
-      if (Kind == FK_Data_4) {
-        Data[0] = static_cast<uint8_t>(Value);
-        Data[1] = static_cast<uint8_t>(Value >> 8);
-        Data[2] = static_cast<uint8_t>(Value >> 16);
-        Data[3] = static_cast<uint8_t>(Value >> 24);
-      }
       Asm->getWriter().recordRelocation(F, Fixup, Target, Value);
       return;
     }

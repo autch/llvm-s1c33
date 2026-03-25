@@ -39,7 +39,7 @@ class S1C33ELFObjectWriter : public MCELFObjectTargetWriter {
 public:
   S1C33ELFObjectWriter(uint8_t OSABI)
       : MCELFObjectTargetWriter(/*Is64Bit=*/false, OSABI, ELF::EM_SE_C33,
-                                /*HasRelAddend=*/false) {}
+                                /*HasRelAddend=*/true) {}
 
   ~S1C33ELFObjectWriter() override = default;
 

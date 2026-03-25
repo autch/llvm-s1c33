@@ -159,11 +159,23 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::MULHU, MVT::i32, Expand);
   }
 
-  // S1C33 has no sign-extend-in-register instruction.  Expand to shifts:
-  // SIGN_EXTEND_INREG i8  → (x << 24) >> 24 (SLL + SRA)
-  // SIGN_EXTEND_INREG i16 → (x << 16) >> 16
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8,  Expand);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
+  // S1C33 has ld.b (sign-extend byte) and ld.h (sign-extend halfword)
+  // register-to-register instructions.  Mark Legal so ISel matches the
+  // LDB_rr / LDH_rr patterns (1 instruction) instead of expanding to
+  // shift pairs (6 instructions for i8, 4 for i16).
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8,  Legal);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Legal);
+
+  // S1C33 has no byte-swap instruction.  SWAP swaps halfwords (rotate-16),
+  // not a full byte reversal.  Expand to shift/mask sequence.
+  setOperationAction(ISD::BSWAP, MVT::i32, Expand);
+  // MIRROR instruction does full 32-bit bit reversal → Legal.
+  setOperationAction(ISD::BITREVERSE, MVT::i32, Legal);
+
+  // S1C33 has no efficient jump table support (no scaled-index addressing).
+  // Disable jump tables entirely so switch statements become if-else chains.
+  setMinimumJumpTableEntries(UINT_MAX);
+  setOperationAction(ISD::BR_JT, MVT::Other, Expand);
 
   // Conditional branches: lower BR_CC to S1C33ISD::CMP + S1C33ISD::BRCOND.
   setOperationAction(ISD::BR_CC,    MVT::i32,   Custom);

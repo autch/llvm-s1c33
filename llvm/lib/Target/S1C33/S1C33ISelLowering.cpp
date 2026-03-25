@@ -192,6 +192,7 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
 
   // Variadic function support.
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
+  setOperationAction(ISD::VAARG,   MVT::Other, Expand);
   setOperationAction(ISD::VACOPY,  MVT::Other, Custom);
   setOperationAction(ISD::VAEND,   MVT::Other, Expand);
 

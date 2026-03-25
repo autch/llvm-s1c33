@@ -141,3 +141,28 @@ done:
   call void @llvm.va_end(ptr %va)
   ret i32 %result
 }
+
+;-------------------------------------------------------------------------------
+; Test 5: va_arg instruction — exercises ISD::VAARG expansion
+;
+; Uses the IR-level va_arg instruction directly (as Clang emits for va_arg()
+; in C code).  The expansion loads the current pointer from va_list, bumps it
+; by sizeof(type), stores back, and loads the value.
+;-------------------------------------------------------------------------------
+
+; CHECK-LABEL: vaarg_direct:
+; CHECK: sub %sp,
+; va_start
+; CHECK: ld.w %r{{[0-9]+}}, %sp
+; va_arg expansion: load va_list ptr, bump by 4, store back, load value
+; CHECK: add %r{{[0-9]+}}, 4
+; CHECK: ld.w %r10, [%r{{[0-9]+}}]
+; CHECK: ret.d
+define i32 @vaarg_direct(i32 %n, ...) {
+entry:
+  %va = alloca ptr, align 4
+  call void @llvm.va_start(ptr %va)
+  %v = va_arg ptr %va, i32
+  call void @llvm.va_end(ptr %va)
+  ret i32 %v
+}

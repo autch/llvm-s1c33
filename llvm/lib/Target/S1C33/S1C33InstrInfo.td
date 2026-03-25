@@ -1428,6 +1428,16 @@ def MUL_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
     "# MUL_r $rd, $rs1, $rs2",
     [(set GR32:$rd, (mul GR32:$rs1, GR32:$rs2))]>;
 
+// MUL16U_r: 16×16 unsigned multiply (1 clock) — selected when both operands
+// are known to fit in unsigned 16 bits.  Expanded to: mltu.h + ld.w %alr
+def MUL16U_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
+    "# MUL16U_r $rd, $rs1, $rs2", []>;
+
+// MUL16S_r: 16×16 signed multiply (1 clock) — selected when both operands
+// are known to fit in signed 16 bits.  Expanded to: mlt.h + ld.w %alr
+def MUL16S_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
+    "# MUL16S_r $rd, $rs1, $rs2", []>;
+
 def MULHS_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
     "# MULHS_r $rd, $rs1, $rs2",
     [(set GR32:$rd, (mulhs GR32:$rs1, GR32:$rs2))]>;

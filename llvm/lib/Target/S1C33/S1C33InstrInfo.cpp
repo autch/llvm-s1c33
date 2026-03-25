@@ -81,6 +81,28 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
 
+  case S1C33::MUL16U_r: {
+    // Expand: mltu.h %rs2, %rs1 + ld.w %rd, %alr  (1-clock 16×16 unsigned)
+    Register Rd  = MI.getOperand(0).getReg();
+    Register Rs1 = MI.getOperand(1).getReg();
+    Register Rs2 = MI.getOperand(2).getReg();
+    BuildMI(MBB, MI, DL, get(S1C33::MLTU_H)).addReg(Rs2).addReg(Rs1);
+    BuildMI(MBB, MI, DL, get(S1C33::LDW_from_ALR), Rd);
+    MI.eraseFromParent();
+    return true;
+  }
+
+  case S1C33::MUL16S_r: {
+    // Expand: mlt.h %rs2, %rs1 + ld.w %rd, %alr  (1-clock 16×16 signed)
+    Register Rd  = MI.getOperand(0).getReg();
+    Register Rs1 = MI.getOperand(1).getReg();
+    Register Rs2 = MI.getOperand(2).getReg();
+    BuildMI(MBB, MI, DL, get(S1C33::MLT_H)).addReg(Rs2).addReg(Rs1);
+    BuildMI(MBB, MI, DL, get(S1C33::LDW_from_ALR), Rd);
+    MI.eraseFromParent();
+    return true;
+  }
+
   case S1C33::MULHS_r: {
     // Expand: mlt.w %rs2, %rs1 + ld.w %rd, %ahr
     Register Rd  = MI.getOperand(0).getReg();

@@ -12,6 +12,7 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -202,6 +203,33 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
         CurDAG->getMachineNode(Opc, DL, MVT::i32, LHS, SDValue(Mov, 0));
     ReplaceNode(Node, Op);
     return;
+  }
+
+  case ISD::MUL: {
+    // When both operands are known to fit in 16 bits, use the 1-clock
+    // 16×16→32 multiply (mltu.h/mlt.h) instead of 5-clock 32×32 (mlt.w).
+    if (!Subtarget->hasHWMul())
+      break;
+    SDValue LHS = Node->getOperand(0);
+    SDValue RHS = Node->getOperand(1);
+    KnownBits LHSBits = CurDAG->computeKnownBits(LHS);
+    KnownBits RHSBits = CurDAG->computeKnownBits(RHS);
+    if (LHSBits.countMaxActiveBits() <= 16 &&
+        RHSBits.countMaxActiveBits() <= 16) {
+      SDNode *Mul = CurDAG->getMachineNode(S1C33::MUL16U_r, DL, MVT::i32,
+                                            LHS, RHS);
+      ReplaceNode(Node, Mul);
+      return;
+    }
+    unsigned LHSSign = CurDAG->ComputeNumSignBits(LHS);
+    unsigned RHSSign = CurDAG->ComputeNumSignBits(RHS);
+    if (LHSSign >= 17 && RHSSign >= 17) {
+      SDNode *Mul = CurDAG->getMachineNode(S1C33::MUL16S_r, DL, MVT::i32,
+                                            LHS, RHS);
+      ReplaceNode(Node, Mul);
+      return;
+    }
+    break;
   }
 
   default:

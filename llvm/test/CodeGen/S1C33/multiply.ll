@@ -59,3 +59,48 @@ define i32 @mulhu_i32(i32 %a, i32 %b) {
   %r = trunc i64 %hi to i32
   ret i32 %r
 }
+
+;-------------------------------------------------------------------------------
+; mul16_unsigned: 16-bit unsigned multiply → mltu.h (1 clock vs 5 for mlt.w)
+;   Both operands are zero-extended from i16, so result fits in 32 bits.
+;-------------------------------------------------------------------------------
+
+; HWMUL-LABEL: mul16_unsigned:
+; HWMUL: mltu.h
+; HWMUL: ret.d
+; HWMUL: ld.w %r10, %alr
+define i32 @mul16_unsigned(i16 zeroext %a, i16 zeroext %b) {
+  %a32 = zext i16 %a to i32
+  %b32 = zext i16 %b to i32
+  %r = mul i32 %a32, %b32
+  ret i32 %r
+}
+
+;-------------------------------------------------------------------------------
+; mul16_signed: 16-bit signed multiply → mlt.h (1 clock vs 5 for mlt.w)
+;   Both operands are sign-extended from i16, so result fits in 32 bits.
+;-------------------------------------------------------------------------------
+
+; HWMUL-LABEL: mul16_signed:
+; HWMUL: mlt.h
+; HWMUL: ret.d
+; HWMUL: ld.w %r10, %alr
+define i32 @mul16_signed(i16 signext %a, i16 signext %b) {
+  %a32 = sext i16 %a to i32
+  %b32 = sext i16 %b to i32
+  %r = mul i32 %a32, %b32
+  ret i32 %r
+}
+
+;-------------------------------------------------------------------------------
+; mul_32bit_stays_mltw: full 32-bit operands must use mlt.w, not mlt.h
+;-------------------------------------------------------------------------------
+
+; HWMUL-LABEL: mul_full32:
+; HWMUL: mlt.w
+; HWMUL-NOT: mlt.h
+; HWMUL-NOT: mltu.h
+define i32 @mul_full32(i32 %a, i32 %b) {
+  %r = mul i32 %a, %b
+  ret i32 %r
+}

@@ -155,8 +155,18 @@ unsigned S1C33MCCodeEmitter::getMachineOpValue(
   assert(MO.isExpr() && "Unexpected MCOperand type");
   const MCExpr *Expr = MO.getExpr();
 
-  // MCSymbolRefExpr with @l/@m/@h specifier → absolute fixup.
-  if (const auto *SRE = dyn_cast<MCSymbolRefExpr>(Expr)) {
+  // Find the MCSymbolRefExpr carrying the @l/@m/@h specifier.
+  // It may be the top-level expression (plain "sym@h") or nested inside an
+  // MCBinaryExpr when the assembly had "sym+offset@h".  The parser's
+  // applySpecifier recurses into binary expressions and attaches the specifier
+  // to the MCSymbolRefExpr on the LHS.
+  const MCSymbolRefExpr *SRE = dyn_cast<MCSymbolRefExpr>(Expr);
+  if (!SRE) {
+    if (const auto *BE = dyn_cast<MCBinaryExpr>(Expr))
+      SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
+  }
+
+  if (SRE) {
     MCFixupKind FK;
     switch (SRE->getSpecifier()) {
     case S1C33::S_ABS_H:

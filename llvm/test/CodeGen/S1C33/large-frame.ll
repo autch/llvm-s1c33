@@ -31,10 +31,11 @@
 ; Ext-prefixed store to %var at SP+64:
 ; CHECK: ext 1
 ; CHECK: ld.w [%sp+64],
-; The SP restore (add %sp, 68) moves to the delay slot of ret.d;
-; it executes before the return completes, restoring SP for the pop.
+; The SP restore (add %sp, 68) must come BEFORE ret.d because ret reads
+; the return address from [SP].  add %sp cannot go in the delay slot.
+; CHECK: add %sp, 68
 ; CHECK: ret.d
-; CHECK-NEXT: add %sp, 68
+; CHECK-NEXT: nop
 define void @sp_ext_access(i32 %val) {
   %var = alloca i32, align 4          ; 4 bytes, first alloca → SP+64 (needs ext)
   %pad = alloca [16 x i32], align 4   ; 64 bytes, second alloca → SP+0..SP+63
@@ -50,8 +51,9 @@ define void @sp_ext_access(i32 %val) {
 
 ; CHECK-LABEL: large_array:
 ; CHECK: sub %sp, 128
+; CHECK: add %sp, 128
 ; CHECK: ret.d
-; CHECK-NEXT: add %sp, 128
+; CHECK-NEXT: nop
 define void @large_array(i32 %val) {
   %arr = alloca [32 x i32], align 4
   %p = getelementptr [32 x i32], ptr %arr, i32 0, i32 0

@@ -88,6 +88,14 @@ bool S1C33DelaySlotFiller::isDelaySlotCandidate(
   // Reject instructions with side effects (e.g. hasSideEffects).
   if (MI.hasUnmodeledSideEffects())
     return false;
+  // Reject instructions that define SP.  ret.d reads [SP] to obtain the
+  // return address, and call.d writes [SP-4] before branching.  If an
+  // SP-modifying instruction (add %sp / sub %sp) is placed in the delay
+  // slot, the branch instruction sees the OLD SP value, not the adjusted
+  // one.  For ret.d this means reading from the wrong stack location
+  // (e.g. outgoing arg area instead of return address → jump to 0).
+  if (MI.definesRegister(S1C33::SP, /*TRI=*/nullptr))
+    return false;
   // Reject instructions larger than 2 bytes (ext-prefixed instructions).
   // All standard 16-bit S1C33 instructions have Size==0 (default); only
   // pseudo ext sequences have Size > 0.  We treat any non-2-byte instruction

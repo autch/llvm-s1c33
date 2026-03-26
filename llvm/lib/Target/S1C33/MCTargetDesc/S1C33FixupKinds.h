@@ -16,17 +16,17 @@ namespace S1C33 {
 
 enum Fixups {
   // 8-bit PC-relative offset for call/branch instructions (Class 0 Rel format).
-  // S1C33 encoding: target = PC + 2*sign8   (PC = instruction's own address)
-  //   sign8 = (target - fixup_addr) / 2
+  // S1C33 encoding: target = PC + 2 + 2*sign8  (PC = instruction's own address)
+  //   sign8 = (target - fixup_addr - 2) / 2
   // Field: bits[7:0] of the 16-bit instruction (LE byte 0).
   fixup_s1c33_pc_rel_8 = FirstTargetFixupKind,
 
   // 21-bit PC-relative fixup for the 4-byte relaxed ext+branch/call sequence.
   // Covers both the ext imm13 field and the following branch sign8 field.
   // S1C33 encoding (ext at fixup_addr, branch at fixup_addr+2):
-  //   target = (fixup_addr + 4) + 2 * extended_imm
+  //   target = (fixup_addr + 2) + 2 * extended_imm
   //   extended_imm = sign_extend_21((imm13 << 8) | sign8_raw)
-  //   extended_imm = (target - fixup_addr - 4) / 2
+  //   extended_imm = (target - fixup_addr - 2) / 2
   //   imm13    = (extended_imm >> 8) & 0x1FFF  → ext word bits[12:0]
   //   sign8_raw = extended_imm & 0xFF           → branch word bits[7:0]
   fixup_s1c33_pc_rel_21,

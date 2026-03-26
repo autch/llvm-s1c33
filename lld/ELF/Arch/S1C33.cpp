@@ -12,6 +12,7 @@
 //
 //   R_S1C33_NONE  = 0   no relocation
 //   R_S1C33_REL8  = 1   8-bit PC-rel: sign8 = (S-P-2)/2, Data[0]
+//                        target = P + 2 + 2*sign8
 //   R_S1C33_32    = 2   32-bit absolute: write32le(loc, S)
 //   R_S1C33_ABS_H = 3   bits[31:19] of S → ext_h imm13
 //   R_S1C33_ABS_M = 4   bits[18:6]  of S → ext_m imm13

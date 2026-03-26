@@ -74,9 +74,9 @@ public:
 
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_8) {
       // S1C33 PC-relative branch encoding:
-      //   target = instr_addr + 2 * sign8   (PC = instruction's own address)
-      //   sign8  = Value / 2  where Value = target - instr_addr
-      int64_t Offset = (int64_t)Value;
+      //   target = instr_addr + 2 + 2 * sign8
+      //   sign8  = (Value - 2) / 2  where Value = target - instr_addr
+      int64_t Offset = (int64_t)Value - 2;
       assert(Offset % 2 == 0 && "PC-relative branch to misaligned target");
       int64_t Sign8 = Offset / 2;
       if (Sign8 < -128 || Sign8 > 127)
@@ -183,7 +183,7 @@ public:
 
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_8) {
       if (!Resolved) return true;
-      int64_t Sign8 = (int64_t)Value / 2;
+      int64_t Sign8 = ((int64_t)Value - 2) / 2;
       return Sign8 < -128 || Sign8 > 127;
     }
 

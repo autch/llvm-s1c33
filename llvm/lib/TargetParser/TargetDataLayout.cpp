@@ -623,7 +623,9 @@ std::string Triple::computeDataLayout(StringRef ABIName) const {
   case Triple::s1c33:
     // S1C33000: little-endian, 32-bit pointers, 32-bit aligned, native 32-bit
     // double aligned to 4 bytes (not 8) per DESIGN_SPEC §2.3
-    return "e-m:e-p:32:32-i1:8-i8:8-i16:16-i32:32-i64:32-f32:32-f64:32-n32-S32";
+    // -a:0:32: prefer 4-byte alignment for aggregates (arrays/structs) so that
+    // const byte arrays used as bitmap data get word-aligned like gcc33.
+    return "e-m:e-p:32:32-i1:8-i8:8-i16:16-i32:32-i64:32-f32:32-f64:32-a:0:32-n32-S32";
   case Triple::wasm32:
   case Triple::wasm64:
     return computeWebAssemblyDataLayout(*this);

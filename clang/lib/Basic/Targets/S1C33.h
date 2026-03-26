@@ -35,7 +35,7 @@ public:
     //   little-endian, no hardware divide, optional hardware multiply
     //
     // DataLayout must match S1C33TargetMachine (Triple::computeDataLayout):
-    //   "e-m:e-p:32:32-i1:8-i8:8-i16:16-i32:32-i64:32-f32:32-f64:32-n32-S32"
+    //   "e-m:e-p:32:32-i1:8-i8:8-i16:16-i32:32-i64:32-f32:32-f64:32-a:0:32-n32-S32"
     TLSSupported = false;
     LongWidth = LongAlign = 32;
     LongLongWidth = 64;
@@ -51,8 +51,9 @@ public:
     DoubleAlign = LongDoubleAlign = 32; // double is 32-bit aligned on S1C33
     LongDoubleWidth = 64;
     LongDoubleFormat = &llvm::APFloat::IEEEdouble();
+    MinGlobalAlign = 32; // match gcc33: all globals at least 4-byte aligned
     resetDataLayout("e-m:e-p:32:32-i1:8-i8:8-i16:16-i32:32-i64:32"
-                    "-f32:32-f64:32-n32-S32");
+                    "-f32:32-f64:32-a:0:32-n32-S32");
   }
 
   void getTargetDefines(const LangOptions &Opts,

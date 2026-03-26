@@ -436,35 +436,45 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
     (void)Callee; // used as-is in all sub-cases below
   }
 
-  // Pre-pass: compute extra stack space needed for byval struct copies.
-  // Byval args are copied to the outgoing argument area by the caller and
-  // their address (StackPtr + offset) is passed in the argument register.
-  // We do NOT use CreateStackObject here to avoid FrameIndex-in-CopyToReg,
-  // which S1C33 cannot lower (no LEA instruction).
-  unsigned ByValExtra = 0;
-  SmallVector<unsigned, 4> ByValOffsets;
+  // Pre-pass: collect byval struct info.
+  // The S5U1C33000C ABI (gcc33) passes struct-by-value arguments entirely on
+  // the stack — register slots are NOT used.  Non-byval scalar arguments still
+  // use R12–R15 as usual.  We handle byval args separately from CC analysis:
+  // first run CC on the non-byval args, then append byval words to the stack
+  // area after the CC-assigned stack args.
+  SmallVector<ISD::OutputArg, 16> ScalarOuts;
+  SmallVector<SDValue, 16> ScalarOutVals;
+  struct ByValInfo {
+    unsigned OrigIdx;   // index in Outs[]
+    unsigned Size;      // byte size of struct
+    unsigned StackOff;  // assigned later
+  };
+  SmallVector<ByValInfo, 4> ByValArgs;
+
   for (unsigned i = 0, e = Outs.size(); i != e; ++i) {
-    ISD::ArgFlagsTy Flags = Outs[i].Flags;
-    if (!Flags.isByVal())
-      continue;
-    unsigned Align = Flags.getNonZeroByValAlign().value();
-    ByValExtra = llvm::alignTo(ByValExtra, Align);
-    ByValOffsets.push_back(ByValExtra);
-    ByValExtra += Flags.getByValSize();
+    if (Outs[i].Flags.isByVal()) {
+      ByValArgs.push_back({i, Outs[i].Flags.getByValSize(), 0});
+    } else {
+      ScalarOuts.push_back(Outs[i]);
+      ScalarOutVals.push_back(OutVals[i]);
+    }
   }
 
-  // Analyze outgoing arguments (call site).
-  // gcc33 varargs ABI: when calling a variadic function, all args go to stack.
+  // Analyze only non-byval (scalar) outgoing arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CLI.CallConv, CLI.IsVarArg, MF, ArgLocs, *DAG.getContext());
   if (CLI.IsVarArg)
-    CCInfo.AnalyzeCallOperands(Outs, CC_S1C33_VarArg);
+    CCInfo.AnalyzeCallOperands(ScalarOuts, CC_S1C33_VarArg);
   else
-    CCInfo.AnalyzeCallOperands(Outs, CC_S1C33);
+    CCInfo.AnalyzeCallOperands(ScalarOuts, CC_S1C33);
 
-  // Total outgoing stack: regular stack args + byval struct copies.
-  unsigned RegArgsSize = CCInfo.getStackSize();
-  unsigned ArgsSize = RegArgsSize + ByValExtra;
+  // Byval structs go on the stack after the CC-assigned area.
+  unsigned ByValBase = CCInfo.getStackSize();
+  for (auto &BV : ByValArgs) {
+    BV.StackOff = ByValBase;
+    ByValBase += llvm::alignTo(BV.Size, 4);
+  }
+  unsigned ArgsSize = ByValBase;
 
   // ADJCALLSTACKDOWN — reserve stack for any stack-passed arguments.
   Chain = DAG.getCALLSEQ_START(Chain, ArgsSize, 0, DL);
@@ -478,32 +488,9 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
   // TwoAddressInstructionPass to fail (regB.isVirtual() assertion).
   SDValue StackPtr = DAG.getCopyFromReg(Chain, DL, S1C33::SP, MVT::i32);
 
-  unsigned ByValIdx = 0;
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     const CCValAssign &VA = ArgLocs[i];
-    SDValue Arg = OutVals[i];
-    ISD::ArgFlagsTy Flags = Outs[i].Flags;
-
-    if (Flags.isByVal()) {
-      // Byval struct arg: copy the struct into the outgoing arg area and pass
-      // the address (StackPtr + offset) in the argument register.
-      // Offset is placed after the regular stack arg area to avoid aliasing.
-      unsigned BVOff = RegArgsSize + ByValOffsets[ByValIdx++];
-      unsigned Size = Flags.getByValSize();
-      Align Alignment = Flags.getNonZeroByValAlign();
-      SDValue DstAddr = DAG.getNode(ISD::ADD, DL, MVT::i32, StackPtr,
-                                    DAG.getConstant(BVOff, DL, MVT::i32));
-      SDValue SizeNode = DAG.getConstant(Size, DL, MVT::i32);
-      Chain = DAG.getMemcpy(Chain, DL, DstAddr, Arg, SizeNode, Alignment,
-                            /*isVol=*/false, /*AlwaysInline=*/false,
-                            /*CI=*/nullptr, /*OverrideTailCall=*/std::nullopt,
-                            MachinePointerInfo::getStack(MF, BVOff),
-                            MachinePointerInfo());
-      MemOpChains.push_back(Chain);
-      // Pass the copy's address (an i32 ADD node, not a raw FrameIndex) so
-      // that CopyToReg can emit it without needing a LEA instruction.
-      Arg = DstAddr;
-    }
+    SDValue Arg = ScalarOutVals[i];
 
     // If the argument value is a raw FrameIndex (e.g. sret pointer to a local
     // alloca), it cannot be used directly as the source of a CopyToReg because
@@ -529,6 +516,28 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
       MemOpChains.push_back(
           DAG.getStore(Chain, DL, Arg, Addr,
                        MachinePointerInfo::getStack(MF, VA.getLocMemOffset())));
+    }
+  }
+
+  // Copy byval struct words to the stack (entirely on stack, no registers).
+  for (const auto &BV : ByValArgs) {
+    SDValue Src = OutVals[BV.OrigIdx]; // pointer to source struct
+    unsigned NumWords = (BV.Size + 3) / 4;
+    for (unsigned w = 0; w < NumWords; w++) {
+      SDValue WordAddr = Src;
+      if (w > 0)
+        WordAddr = DAG.getNode(ISD::ADD, DL, MVT::i32, Src,
+                               DAG.getConstant(w * 4, DL, MVT::i32));
+      SDValue Word = DAG.getLoad(MVT::i32, DL, Chain, WordAddr,
+                                 MachinePointerInfo());
+      Chain = Word.getValue(1);
+
+      unsigned Off = BV.StackOff + w * 4;
+      SDValue DstAddr = DAG.getNode(ISD::ADD, DL, MVT::i32, StackPtr,
+                                    DAG.getConstant(Off, DL, MVT::i32));
+      MemOpChains.push_back(
+          DAG.getStore(Chain, DL, Word, DstAddr,
+                       MachinePointerInfo::getStack(MF, Off)));
     }
   }
 

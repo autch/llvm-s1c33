@@ -95,9 +95,9 @@ int64_t S1C33::getImplicitAddend(const uint8_t *buf, RelType type) const {
   case R_S1C33_NONE:
     return 0;
   case R_S1C33_REL8: {
-    // sign8 field → addend = 2 + 2 * sign8
+    // sign8 field → addend = 2 * sign8
     int8_t sign8 = static_cast<int8_t>(buf[0]);
-    return 2 + 2 * static_cast<int64_t>(sign8);
+    return 2 * static_cast<int64_t>(sign8);
   }
   case R_S1C33_32:
     return SignExtend64<32>(read32le(buf));
@@ -149,8 +149,8 @@ void S1C33::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     break;
 
   case R_S1C33_REL8: {
-    // sign8 = (val - 2) / 2  (val = target - P, branch target = P+2+2*sign8)
-    int64_t sv = static_cast<int64_t>(val) - 2;
+    // sign8 = val / 2  (val = target - P, branch target = P + 2*sign8)
+    int64_t sv = static_cast<int64_t>(val);
     if (sv & 1)
       Err(ctx) << getErrorLoc(ctx, loc) << "R_S1C33_REL8: misaligned target";
     int64_t sign8 = sv / 2;

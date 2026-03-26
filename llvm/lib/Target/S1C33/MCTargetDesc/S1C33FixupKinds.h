@@ -16,8 +16,8 @@ namespace S1C33 {
 
 enum Fixups {
   // 8-bit PC-relative offset for call/branch instructions (Class 0 Rel format).
-  // S1C33 encoding: target = PC + 2 + 2*sign8  (PC = instruction's own address)
-  //   sign8 = (target - fixup_addr - 2) / 2
+  // S1C33 encoding: target = PC + 2*sign8  (PC = instruction's own address)
+  //   sign8 = (target - fixup_addr) / 2
   // Field: bits[7:0] of the 16-bit instruction (LE byte 0).
   fixup_s1c33_pc_rel_8 = FirstTargetFixupKind,
 

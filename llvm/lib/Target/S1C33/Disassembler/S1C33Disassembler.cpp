@@ -140,12 +140,12 @@ static DecodeStatus decodeUimm13Operand(MCInst &Inst, unsigned Val,
   return MCDisassembler::Success;
 }
 
-// PC-relative 8-bit signed offset: target = (Address + 2) + 2*sign8.
+// PC-relative 8-bit signed offset: target = Address + 2*sign8.
 static DecodeStatus decodePCRelSimm8Operand(MCInst &Inst, unsigned Val,
                                              uint64_t Address,
                                              const MCDisassembler *Decoder) {
   int64_t Sign8 = SignExtend32<8>(Val);
-  int64_t Target = (int64_t)Address + 2 + 2 * Sign8;
+  int64_t Target = (int64_t)Address + 2 * Sign8;
   if (!Decoder->tryAddingSymbolicOperand(Inst, Target, Address,
                                           /*IsBranch=*/true, 0, 1, 2))
     Inst.addOperand(MCOperand::createImm(Sign8));

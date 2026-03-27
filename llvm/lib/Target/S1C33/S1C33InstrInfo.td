@@ -466,12 +466,15 @@ def CALL_EXT1 : S1C33PseudoExt1<(outs), (ins i32imm:$imm8), "call\t$imm8", []> {
 // The MC relaxation layer starts at EXT0 and grows as needed.
 //===----------------------------------------------------------------------===//
 
+// ld.w %rd, imm6 (immediate load) clobbers PSR N/Z flags.
+let Defs = [PSR] in {
 def LDW_SYM_EXT0 : S1C33PseudoAddrN<2, (outs GR32:$rd), (ins i32imm:$sym),
     "ld.w\t$rd, $sym", []>;
 def LDW_SYM_EXT1 : S1C33PseudoAddrN<4, (outs GR32:$rd), (ins i32imm:$sym),
     "ld.w\t$rd, $sym", []>;
 def LDW_SYM_EXT2 : S1C33PseudoAddrN<6, (outs GR32:$rd), (ins i32imm:$sym),
     "ld.w\t$rd, $sym", []>;
+}
 
 // int imm2 — Software exception  (op1=0010, d=0, op2=10) → 0x0480|imm2
 def INT : S1C33InstC0Imm2<0b0010, 0, 0b10,
@@ -929,22 +932,20 @@ let Defs = [PSR], hasSideEffects = 0, Constraints = "$rd = $rs", SchedRW = [Writ
 
 let Defs = [PSR], hasSideEffects = 0, Constraints = "$rd = $rs1", SchedRW = [WriteALU] in {
   // srl %rd, %rs  logical right shift by register amount  (op1=010)
+  // No pattern — variable shifts go through VSRL pseudo (shift loop).
   def SRL_rr : S1C33InstC4ShiftReg<0b010,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
-      "srl\t$rd, $rs",
-      [(set GR32:$rd, (srl GR32:$rs1, GR32:$rs))]>;
+      "srl\t$rd, $rs", []>;
 
   // sll %rd, %rs  logical left shift by register amount  (op1=011)
   def SLL_rr : S1C33InstC4ShiftReg<0b011,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
-      "sll\t$rd, $rs",
-      [(set GR32:$rd, (shl GR32:$rs1, GR32:$rs))]>;
+      "sll\t$rd, $rs", []>;
 
   // sra %rd, %rs  arithmetic right shift by register amount  (op1=100)
   def SRA_rr : S1C33InstC4ShiftReg<0b100,
       (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
-      "sra\t$rd, $rs",
-      [(set GR32:$rd, (sra GR32:$rs1, GR32:$rs))]>;
+      "sra\t$rd, $rs", []>;
 
   // sla %rd, %rs  shift left arithmetic by register  (op1=101)
   def SLA_rr : S1C33InstC4ShiftReg<0b101,
@@ -1094,6 +1095,10 @@ def MOV_ri32 : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$imm32),
   let hasSideEffects = 0;
   let mayLoad = 0;
   let mayStore = 0;
+  // ld.w %rd, sign6 (the final instruction after ext expansion) clobbers
+  // N/Z flags.  Without this, the scheduler can place MOV_ri32 between
+  // a compare and a conditional branch, silently clobbering PSR.
+  let Defs = [PSR];
 }
 
 // ALU_ri32 pseudos — 2-address immediate ALU for constants beyond imm6 range.
@@ -1135,6 +1140,24 @@ def SELECT : S1C33Pseudo<
                                     GR32:$trueval, GR32:$falseval,
                                     imm:$cc))]> {
   let usesCustomInserter = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Variable shift pseudos — expanded by EmitInstrWithCustomInserter.
+// S1C33 shift instructions only support amounts 0-8 (both immediate and
+// register-register forms).  For variable shifts the amount may exceed 8,
+// so we expand into a loop that shifts by 8 at a time.
+//===----------------------------------------------------------------------===//
+let usesCustomInserter = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+  def VSRL : S1C33Pseudo<(outs GR32:$dst), (ins GR32:$val, GR32:$amt),
+      "# VSRL $dst, $val, $amt",
+      [(set GR32:$dst, (srl GR32:$val, GR32:$amt))]>;
+  def VSLL : S1C33Pseudo<(outs GR32:$dst), (ins GR32:$val, GR32:$amt),
+      "# VSLL $dst, $val, $amt",
+      [(set GR32:$dst, (shl GR32:$val, GR32:$amt))]>;
+  def VSRA : S1C33Pseudo<(outs GR32:$dst), (ins GR32:$val, GR32:$amt),
+      "# VSRA $dst, $val, $amt",
+      [(set GR32:$dst, (sra GR32:$val, GR32:$amt))]>;
 }
 
 //===----------------------------------------------------------------------===//

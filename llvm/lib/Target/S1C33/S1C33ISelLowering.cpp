@@ -703,7 +703,113 @@ SDValue S1C33TargetLowering::LowerSELECT_CC(SDValue Op,
 // SELECT pseudo expansion (EmitInstrWithCustomInserter)
 //===----------------------------------------------------------------------===//
 
-// Expand the SELECT pseudo using the triangle pattern (following MSP430):
+// Variable shift expansion.
+// S1C33 shift instructions (both immediate and register-register forms) only
+// support shift amounts 0-8.  For a variable shift where the amount may
+// exceed 8, we expand into a loop:
+//
+//   BB:
+//     cmp %amt, 8
+//     jrule DoneMBB           ← amt <= 8, skip loop
+//   LoopMBB:                  ← shift by 8 repeatedly
+//     %lp_val = PHI [%val, BB], [%shifted, LoopMBB]
+//     %lp_amt = PHI [%amt, BB], [%new_amt, LoopMBB]
+//     %shifted = srl %lp_val, 8
+//     %new_amt = sub %lp_amt, 8
+//     cmp %new_amt, 8
+//     jrugt LoopMBB
+//   DoneMBB:
+//     %d_val = PHI [%val, BB], [%shifted, LoopMBB]
+//     %d_amt = PHI [%amt, BB], [%new_amt, LoopMBB]
+//     %dst   = srl %d_val, %d_amt
+//
+MachineBasicBlock *
+S1C33TargetLowering::emitVariableShift(MachineInstr &MI,
+                                       MachineBasicBlock *BB) const {
+  unsigned Opc = MI.getOpcode();
+  unsigned ShiftImmOpc, ShiftRegOpc;
+  switch (Opc) {
+  case S1C33::VSRL: ShiftImmOpc = S1C33::SRL_ri; ShiftRegOpc = S1C33::SRL_rr; break;
+  case S1C33::VSLL: ShiftImmOpc = S1C33::SLL_ri; ShiftRegOpc = S1C33::SLL_rr; break;
+  case S1C33::VSRA: ShiftImmOpc = S1C33::SRA_ri; ShiftRegOpc = S1C33::SRA_rr; break;
+  default: llvm_unreachable("unexpected variable shift opcode");
+  }
+
+  const S1C33Subtarget &STI = BB->getParent()->getSubtarget<S1C33Subtarget>();
+  const S1C33InstrInfo &TII =
+      *static_cast<const S1C33InstrInfo *>(STI.getInstrInfo());
+  MachineFunction *MF = BB->getParent();
+  MachineRegisterInfo &MRI = MF->getRegInfo();
+  DebugLoc DL = MI.getDebugLoc();
+  const TargetRegisterClass *RC = &S1C33::GR32RegClass;
+
+  Register Dst = MI.getOperand(0).getReg();
+  Register Val = MI.getOperand(1).getReg();
+  Register Amt = MI.getOperand(2).getReg();
+
+  // Create LoopMBB and DoneMBB.
+  MachineBasicBlock *LoopMBB = MF->CreateMachineBasicBlock();
+  MachineBasicBlock *DoneMBB = MF->CreateMachineBasicBlock();
+
+  MachineFunction::iterator It = ++BB->getIterator();
+  MF->insert(It, LoopMBB);
+  MF->insert(It, DoneMBB);
+
+  // Move the tail of BB into DoneMBB.
+  DoneMBB->splice(DoneMBB->begin(), BB,
+                  std::next(MachineBasicBlock::iterator(MI)), BB->end());
+  DoneMBB->transferSuccessorsAndUpdatePHIs(BB);
+
+  // BB → LoopMBB (fall-through if amt > 8) and BB → DoneMBB (branch if amt <= 8).
+  BB->addSuccessor(LoopMBB);
+  BB->addSuccessor(DoneMBB);
+  // LoopMBB → LoopMBB (loop back) and LoopMBB → DoneMBB (exit).
+  LoopMBB->addSuccessor(LoopMBB);
+  LoopMBB->addSuccessor(DoneMBB);
+
+  // BB: cmp %amt, 8; jrule DoneMBB
+  BuildMI(BB, DL, TII.get(S1C33::CMP_ri)).addReg(Amt).addImm(8);
+  BuildMI(BB, DL, TII.get(S1C33::JRULE)).addMBB(DoneMBB);
+
+  // LoopMBB: PHIs, shift-by-8, sub-8, cmp, branch-back.
+  Register LoopVal = MRI.createVirtualRegister(RC);
+  Register LoopAmt = MRI.createVirtualRegister(RC);
+  Register ShiftedVal = MRI.createVirtualRegister(RC);
+  Register NewAmt = MRI.createVirtualRegister(RC);
+
+  BuildMI(LoopMBB, DL, TII.get(TargetOpcode::PHI), LoopVal)
+      .addReg(Val).addMBB(BB)
+      .addReg(ShiftedVal).addMBB(LoopMBB);
+  BuildMI(LoopMBB, DL, TII.get(TargetOpcode::PHI), LoopAmt)
+      .addReg(Amt).addMBB(BB)
+      .addReg(NewAmt).addMBB(LoopMBB);
+  BuildMI(LoopMBB, DL, TII.get(ShiftImmOpc), ShiftedVal)
+      .addReg(LoopVal).addImm(8);
+  BuildMI(LoopMBB, DL, TII.get(S1C33::SUB_ri), NewAmt)
+      .addReg(LoopAmt).addImm(8);
+  BuildMI(LoopMBB, DL, TII.get(S1C33::CMP_ri)).addReg(NewAmt).addImm(8);
+  BuildMI(LoopMBB, DL, TII.get(S1C33::JRUGT)).addMBB(LoopMBB);
+
+  // DoneMBB: PHIs for value/amount, then final register-register shift.
+  Register DoneVal = MRI.createVirtualRegister(RC);
+  Register DoneAmt = MRI.createVirtualRegister(RC);
+
+  BuildMI(*DoneMBB, DoneMBB->begin(), DL, TII.get(TargetOpcode::PHI), DoneAmt)
+      .addReg(Amt).addMBB(BB)
+      .addReg(NewAmt).addMBB(LoopMBB);
+  BuildMI(*DoneMBB, DoneMBB->begin(), DL, TII.get(TargetOpcode::PHI), DoneVal)
+      .addReg(Val).addMBB(BB)
+      .addReg(ShiftedVal).addMBB(LoopMBB);
+  // Insert the final shift after the PHIs.
+  auto InsertPt = DoneMBB->begin();
+  while (InsertPt != DoneMBB->end() && InsertPt->isPHI())
+    ++InsertPt;
+  BuildMI(*DoneMBB, InsertPt, DL, TII.get(ShiftRegOpc), Dst)
+      .addReg(DoneVal).addReg(DoneAmt);
+
+  MI.eraseFromParent();
+  return DoneMBB;
+}
 //
 //   BB:
 //     cmp %lhs, %rhs
@@ -717,7 +823,11 @@ SDValue S1C33TargetLowering::LowerSELECT_CC(SDValue Op,
 MachineBasicBlock *
 S1C33TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
                                                   MachineBasicBlock *BB) const {
-  assert(MI.getOpcode() == S1C33::SELECT && "Unexpected pseudo opcode");
+  unsigned Opc = MI.getOpcode();
+  if (Opc == S1C33::VSRL || Opc == S1C33::VSLL || Opc == S1C33::VSRA)
+    return emitVariableShift(MI, BB);
+
+  assert(Opc == S1C33::SELECT && "Unexpected pseudo opcode");
 
   const S1C33Subtarget &STI = BB->getParent()->getSubtarget<S1C33Subtarget>();
   const S1C33InstrInfo &TII =

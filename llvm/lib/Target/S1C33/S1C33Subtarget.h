@@ -42,6 +42,10 @@ public:
 
   bool hasHWMul() const { return HasHWMul; }
 
+  // Enable post-RA list scheduler to use the SchedMachineModel latencies
+  // for reordering instructions (e.g., hiding load-use penalties).
+  bool enablePostRAScheduler() const override { return true; }
+
   const SelectionDAGTargetInfo *getSelectionDAGInfo() const override {
     return &TSInfo;
   }

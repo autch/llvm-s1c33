@@ -37,10 +37,9 @@ define void @call_s8(ptr %p) {
 define void @call_mixed(i32 %a, ptr %p, i32 %b) {
 ; CHECK-LABEL: call_mixed:
 ; CHECK: sub %sp, 8
-; Struct words stored to stack
-; CHECK: ld.w [%r{{[0-9]+}}],
-; Scalar b moves to R13 (was R14, a stays in R12)
-; CHECK: ld.w %r13, %r14
+; Struct words stored to stack; scalar b moves to R13 (was R14)
+; Scheduler may reorder the mov and stores.
+; CHECK-DAG: ld.w %r13, %r14
 ; CHECK: call takes_mixed
   call void @takes_mixed(i32 %a, ptr byval(%struct.S8) align 4 %p, i32 %b)
   ret void

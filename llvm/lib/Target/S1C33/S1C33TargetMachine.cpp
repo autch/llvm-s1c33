@@ -81,8 +81,9 @@ MachineFunctionInfo *S1C33TargetMachine::createMachineFunctionInfo(
 }
 
 void S1C33PassConfig::addPreEmitPass() {
-  // Run the delay slot filler after register allocation and before emission.
-  // This converts RET → RET_D and CALL_r → CALL_r_D, filling the delay slot
-  // with a useful instruction or NOP.
+  // Expand ext-producing pseudos (MOV_ri32, ALU_ri32, offset loads/stores)
+  // AFTER the post-RA scheduler so that ext+target pairs aren't split.
+  addPass(createS1C33ExpandExtPseudosPass());
+  // Run the delay slot filler after ext expansion.
   addPass(createS1C33DelaySlotFillerPass());
 }

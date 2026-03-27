@@ -19,6 +19,7 @@ class FunctionPass;
 class PassRegistry;
 
 FunctionPass *createS1C33ISelDag(S1C33TargetMachine &TM);
+FunctionPass *createS1C33ExpandExtPseudosPass();
 FunctionPass *createS1C33DelaySlotFillerPass();
 
 void initializeS1C33AsmPrinterPass(PassRegistry &);

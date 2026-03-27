@@ -26,21 +26,22 @@ def HasHWMul : Predicate<"Subtarget->hasHWMul()">,
                AssemblerPredicate<(all_of FeatureHWMul), "Hardware Multiplier">;
 
 //===----------------------------------------------------------------------===//
-// S1C33 Processors
-//===----------------------------------------------------------------------===//
-
-def : ProcessorModel<"generic", NoSchedModel, []>;
-
-// S1C33209: the SoC used in P/ECE, has optional multiplier.
-def : ProcessorModel<"s1c33209", NoSchedModel, [FeatureHWMul]>;
-
-//===----------------------------------------------------------------------===//
-// Register File, Instruction Descriptions
+// Register File, Instruction Descriptions, Scheduling
 //===----------------------------------------------------------------------===//
 
 include "S1C33RegisterInfo.td"
 include "S1C33CallingConv.td"
+include "S1C33Schedule.td"
 include "S1C33InstrInfo.td"
+
+//===----------------------------------------------------------------------===//
+// S1C33 Processors
+//===----------------------------------------------------------------------===//
+
+def : ProcessorModel<"generic", S1C33Model, []>;
+
+// S1C33209: the SoC used in P/ECE, has optional multiplier.
+def : ProcessorModel<"s1c33209", S1C33Model, [FeatureHWMul]>;
 
 defm : RemapAllTargetPseudoPointerOperands<GR32>;
 

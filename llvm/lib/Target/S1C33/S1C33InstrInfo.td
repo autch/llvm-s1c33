@@ -197,14 +197,14 @@ def negImmToUImm6 : PatLeaf<(imm), [{
 
 // SDNodeXForm: negate a constant (for negImmToUImm6 → uimm6 conversion).
 def NegImm : SDNodeXForm<imm, [{
-  return CurDAG->getTargetConstant(-N->getSExtValue(), SDLoc(N), MVT::i32);
+  return CurDAG->getTargetConstant((uint32_t)(-(uint32_t)N->getZExtValue()), SDLoc(N), MVT::i32);
 }]>;
 
 // SDNodeXForm: identity conversion of an imm to a fresh TargetConstant.
 // Used in standalone Pat<> patterns to avoid shared Constant nodes getting replaced
 // by a materialized register when the same constant is used elsewhere in the DAG.
 def ImmAsTarget : SDNodeXForm<imm, [{
-  return CurDAG->getTargetConstant(N->getSExtValue(), SDLoc(N), MVT::i32);
+  return CurDAG->getTargetConstant((uint32_t)N->getZExtValue(), SDLoc(N), MVT::i32);
 }]>;
 
 //===----------------------------------------------------------------------===//

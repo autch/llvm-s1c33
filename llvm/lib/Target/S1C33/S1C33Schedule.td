@@ -40,8 +40,8 @@
 def WriteALU   : SchedWrite;  // Generic ALU (1 cycle)
 def WriteLd    : SchedWrite;  // Memory load [%rb] / [%sp+imm6] (2 cycles)
 def WriteLdPI  : SchedWrite;  // Post-increment load [%rb]+ (2 cycles)
-def WriteMltW  : SchedWrite;  // mlt.w / mltu.w 32×32→64 (5 cycles)
-def WriteMltH  : SchedWrite;  // mlt.h / mltu.h 16×16→32 (1 cycle)
+def WriteMltW  : SchedWrite;  // mlt.w / mltu.w 32×32→64 (pipeline interlocks)
+def WriteMltH  : SchedWrite;  // mlt.h / mltu.h 16×16→32 (pipeline interlocks)
 def WriteBitOp : SchedWrite;  // btst/bclr/bset/bnot memory bit ops (3 cycles)
 
 def ReadAfterLd : SchedRead;  // Read consuming a load result
@@ -60,7 +60,7 @@ let SchedModel = S1C33Model in {
   def : WriteRes<WriteALU,   []> { let Latency = 1; }
   def : WriteRes<WriteLd,    []> { let Latency = 2; }
   def : WriteRes<WriteLdPI,  []> { let Latency = 2; }
-  def : WriteRes<WriteMltW,  []> { let Latency = 5; }
+  def : WriteRes<WriteMltW,  []> { let Latency = 1; }
   def : WriteRes<WriteMltH,  []> { let Latency = 1; }
   def : WriteRes<WriteBitOp, []> { let Latency = 3; }
 

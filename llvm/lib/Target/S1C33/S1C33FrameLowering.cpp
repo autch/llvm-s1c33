@@ -111,11 +111,16 @@ void S1C33FrameLowering::emitPrologue(MachineFunction &MF,
   // Allocate local variable space with sub %sp, FrameSize.
   // StackSize does NOT include callee-saved registers (assignCalleeSavedSpillSlots
   // returns true, preventing frame slot allocation for callee-saved regs).
+  //
+  // S1C33 hardware interprets the imm10 field in word units (×4).
+  // gcc33 encodes "sub %sp, 0x8" for 32 bytes (8 words × 4).
   uint64_t StackSize = MFI.getStackSize();
   if (StackSize > 0) {
-    assert(StackSize <= 1023 && "Stack frame too large for SUBSP_i imm10");
+    assert((StackSize & 3) == 0 && "Stack size must be 4-byte aligned");
+    uint64_t WordSize = StackSize / 4;
+    assert(WordSize <= 1023 && "Stack frame too large for SUBSP_i imm10");
     BuildMI(MBB, MBBI, DL, TII.get(S1C33::SUBSP_i))
-        .addImm(StackSize);
+        .addImm(WordSize);
   }
 }
 
@@ -135,11 +140,14 @@ void S1C33FrameLowering::emitEpilogue(MachineFunction &MF,
   bool IsISR = MF.getFunction().hasFnAttribute("interrupt_handler");
 
   // Free local variable space (insert before MBBI = ret/reti).
+  // S1C33 hardware interprets the imm10 field in word units (×4).
   uint64_t StackSize = MFI.getStackSize();
   if (StackSize > 0) {
-    assert(StackSize <= 1023 && "Stack frame too large for ADDSP_i imm10");
+    assert((StackSize & 3) == 0 && "Stack size must be 4-byte aligned");
+    uint64_t WordSize = StackSize / 4;
+    assert(WordSize <= 1023 && "Stack frame too large for ADDSP_i imm10");
     BuildMI(MBB, MBBI, DL, TII.get(S1C33::ADDSP_i))
-        .addImm(StackSize);
+        .addImm(WordSize);
   }
 
   if (IsISR) {

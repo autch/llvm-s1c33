@@ -1,57 +1,51 @@
 ; RUN: llc -mtriple=s1c33-none-elf -o - %s | FileCheck %s
 ;
-; Large stack frame: verify that SP-relative accesses with offset > 63
-; are prefixed with 'ext' as required by the S1C33 ISA.
+; Large stack frame: verify that SP-relative accesses and add/sub %sp use
+; word-scaled immediates as required by the S1C33 ISA.
 ;
-; SP-relative instructions use a 6-bit unsigned field (range 0..63 bytes).
-; For offsets 64 and above, eliminateFrameIndex inserts 'ext imm13' before
-; the memory instruction so the hardware sees:
-;   address = SP + sign_extend_19({ext_imm13, offset[5:0]})
+; SP-relative word load/store: imm6 is in word units (×4).
+;   Range without ext: 0–63 words = 0–252 bytes.
+; add/sub %sp: imm10 is in word units (×4).
+;   Range without ext: 0–1023 words = 0–4092 bytes.
+;
+; For word offsets > 63, eliminateFrameIndex inserts 'ext' before the
+; memory instruction.
 
 ;-------------------------------------------------------------------------------
-; sp_ext_access: alloca two objects — a 64-byte pad and a 4-byte variable.
+; sp_ext_access: alloca two objects — a 256-byte pad and a 4-byte variable.
 ; Frame layout (SP grows down):
-;   [SP+68] virtual frame base
-;   [SP+64] var (offset 64 from SP → needs ext 1)
-;   [SP+0 ] pad[0..15] (offset 0 from SP → no ext)
-;   [SP]    stack pointer
+;   SP+0  : %pad  (256 bytes, second alloca → lowest address)
+;   SP+256: %var  (4 bytes, first alloca → highest address)
+; Total: 260 bytes = 65 words.
 ;
-; The store to 'var' at SP+64 requires:  ext 1 / ld.w [%sp+64], %rN
+; Word offset 64 for %var (256 bytes / 4) requires ext because 64 > 63.
 ;-------------------------------------------------------------------------------
-
-; Frame layout for sp_ext_access (LLVM assigns first alloca to highest SP offset):
-;   SP+0  : %pad  (64 bytes, second alloca → lowest address)
-;   SP+64 : %var  (4 bytes, first alloca → highest address)
-; Total: 68 bytes.
-;
-; Direct store to %var (no GEP) at SP+64 requires ext 1.
 
 ; CHECK-LABEL: sp_ext_access:
-; CHECK: sub %sp, 68
-; Ext-prefixed store to %var at SP+64:
+; CHECK: sub %sp, 65
+; Ext-prefixed store to %var at word offset 64:
 ; CHECK: ext 1
-; CHECK: ld.w [%sp+64],
-; The SP restore (add %sp, 68) must come BEFORE ret.d because ret reads
-; the return address from [SP].  add %sp cannot go in the delay slot.
-; CHECK: add %sp, 68
+; CHECK-NEXT: ld.w [%sp+64],
+; CHECK: add %sp, 65
 ; CHECK: ret.d
 ; CHECK-NEXT: nop
 define void @sp_ext_access(i32 %val) {
-  %var = alloca i32, align 4          ; 4 bytes, first alloca → SP+64 (needs ext)
-  %pad = alloca [16 x i32], align 4   ; 64 bytes, second alloca → SP+0..SP+63
-  store i32 %val, ptr %var            ; direct store, no GEP: SP+64 → ext 1
+  %var = alloca i32, align 4            ; 4 bytes, first alloca → word offset 64
+  %pad = alloca [64 x i32], align 4     ; 256 bytes, second alloca → SP+0..SP+255
+  store i32 %val, ptr %var              ; word offset 64 → ext 1
   ; store 0 to pad[0] to prevent %pad from being DCE'd
   store i32 0, ptr %pad
   ret void
 }
 
 ;-------------------------------------------------------------------------------
-; large_array: alloca [32 x i32] (128 bytes) — large sub %sp, verify frame.
+; large_array: alloca [32 x i32] (128 bytes = 32 words) — verify word-scaled
+; sub/add %sp.
 ;-------------------------------------------------------------------------------
 
 ; CHECK-LABEL: large_array:
-; CHECK: sub %sp, 128
-; CHECK: add %sp, 128
+; CHECK: sub %sp, 32
+; CHECK: add %sp, 32
 ; CHECK: ret.d
 ; CHECK-NEXT: nop
 define void @large_array(i32 %val) {

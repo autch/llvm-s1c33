@@ -23,8 +23,8 @@ declare void @llvm.va_copy(ptr, ptr)
 ;-------------------------------------------------------------------------------
 
 ; CHECK-LABEL: varargs_callee:
-; Prologue allocates 4 bytes for %va.
-; CHECK: sub %sp, 4
+; Prologue allocates 1 word (4 bytes) for %va.
+; CHECK: sub %sp, 1
 ; ADJFI materialises the first-vararg address as SP+12 into a scratch register.
 ; CHECK: ld.w %r{{[0-9]+}}, %sp
 ; CHECK-NEXT: add %r{{[0-9]+}}, 12
@@ -77,15 +77,15 @@ define i32 @call_varargs(i32 %x, i32 %y) {
 ;-------------------------------------------------------------------------------
 
 ; CHECK-LABEL: varargs_copy:
-; Prologue allocates 8 bytes for both %va1 and %va2.
-; CHECK: sub %sp, 8
+; Prologue allocates 2 words (8 bytes) for both %va1 and %va2.
+; CHECK: sub %sp, 2
 ; va_start materialises SP+16 into a register.
 ; CHECK: ld.w %r{{[0-9]+}}, %sp
 ; CHECK-NEXT: add %r{{[0-9]+}}, 16
 ; Store address to va1.
 ; CHECK: ld.w [%sp+0], %r{{[0-9]+}}
 ; va_copy stores the same address to va2.
-; CHECK: ld.w [%sp+4], %r{{[0-9]+}}
+; CHECK: ld.w [%sp+1], %r{{[0-9]+}}
 ; CHECK: ret.d
 define i32 @varargs_copy(i32 %n, ...) {
   %va1 = alloca ptr, align 4

@@ -278,7 +278,7 @@ def CALL_r_D : S1C33InstC0Reg<0b0011, 1, 0b00,
     (outs), (ins GR32:$rb), "call.d\t$rb", []> {
   let isCall       = 1;
   let hasDelaySlot = 1;
-  let Defs         = [SP, R4, R5, R6, R7, R10, R11];
+  let Defs         = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses         = [SP];
 }
 
@@ -308,10 +308,11 @@ def POPN : S1C33InstC0Reg<0b0001, 0, 0b01,
 }
 
 // call %rb — Subroutine call via register  (op1=0011, d=0, op2=00) → 0x0600|rb
+// Callee may clobber PSR (N/Z/V/C flags) and caller-saved registers.
 def CALL_r : S1C33InstC0Reg<0b0011, 0, 0b00,
     (outs), (ins GR32:$rb), "call\t$rb", []> {
   let isCall = 1;
-  let Defs = [SP];
+  let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
 }
 
@@ -346,7 +347,7 @@ def JP_i : S1C33InstC0Rel<0b1111, 0,
 def CALL_i : S1C33InstC0Rel<0b1110, 0,
     (outs), (ins simm8:$imm8), "call\t$imm8", []> {
   let isCall = 1;
-  let Defs = [SP];
+  let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
 }
 
@@ -358,8 +359,8 @@ def CALL_sym : S1C33InstC0Rel<0b1110, 0,
     (outs), (ins i32imm:$imm8), "call\t$imm8", []> {
   let isCall = 1;
   let isCodeGenOnly = 1;
-  // Clobbers: caller-saved R4–R7 and return-value regs R10/R11.
-  let Defs = [SP, R4, R5, R6, R7, R10, R11];
+  // Clobbers: PSR flags, caller-saved R4–R7 and return-value regs R10/R11.
+  let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
 }
 
@@ -451,7 +452,7 @@ def JP_D_EXT1 : S1C33PseudoExt1<(outs), (ins simm8:$imm8), "jp.d\t$imm8", []> {
 }
 def CALL_EXT1 : S1C33PseudoExt1<(outs), (ins i32imm:$imm8), "call\t$imm8", []> {
   let isCall = 1;
-  let Defs = [SP, R4, R5, R6, R7, R10, R11];
+  let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
 }
 

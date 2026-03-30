@@ -72,6 +72,11 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
 
   case S1C33::MUL_r: {
     // Expand: mlt.w %rs2, %rs1 + ld.w %rd, %alr
+    // S1C33209 hardware multiplier: the pipeline interlocks on ALR/AHR reads,
+    // stalling until the result is ready.  gcc33 also reads ALR immediately
+    // after mlt.w with no NOPs.  Inserting explicit NOPs is harmful: the gap
+    // creates a window where interrupts (e.g. DMA for sound playback) can
+    // fire and clobber ALR/AHR, producing garbage multiply results.
     Register Rd  = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();
@@ -82,7 +87,8 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   }
 
   case S1C33::MUL16U_r: {
-    // Expand: mltu.h %rs2, %rs1 + ld.w %rd, %alr  (1-clock 16×16 unsigned)
+    // Expand: mltu.h %rs2, %rs1 + ld.w %rd, %alr
+    // Pipeline interlocks on ALR read; no NOP needed (see MUL_r comment).
     Register Rd  = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();
@@ -93,7 +99,8 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   }
 
   case S1C33::MUL16S_r: {
-    // Expand: mlt.h %rs2, %rs1 + ld.w %rd, %alr  (1-clock 16×16 signed)
+    // Expand: mlt.h %rs2, %rs1 + ld.w %rd, %alr
+    // Pipeline interlocks on ALR read; no NOP needed (see MUL_r comment).
     Register Rd  = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();
@@ -105,6 +112,7 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
 
   case S1C33::MULHS_r: {
     // Expand: mlt.w %rs2, %rs1 + ld.w %rd, %ahr
+    // Pipeline interlocks on AHR read; no NOP needed (see MUL_r comment).
     Register Rd  = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();
@@ -116,6 +124,7 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
 
   case S1C33::MULHU_r: {
     // Expand: mltu.w %rs2, %rs1 + ld.w %rd, %ahr
+    // Pipeline interlocks on AHR read; no NOP needed (see MUL_r comment).
     Register Rd  = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();

@@ -66,14 +66,13 @@ void S1C33InstPrinter::printInst(const MCInst *MI, uint64_t Address,
   if (!printAliasInstr(MI, Address, O))
     printInstruction(MI, Address, O);
 
-  // For add/sub %sp, imm10 the immediate is a byte count.  Annotate with the
-  // equivalent word count (÷4) since EPSON's as33/gcc33 uses word units for
-  // SP arithmetic, making comparisons with legacy code easier.
+  // For add/sub %sp, imm10 the immediate is a word count (hardware ×4).
+  // Annotate with the byte count for easy reading.
   if (Opc == S1C33::ADDSP_i || Opc == S1C33::SUBSP_i) {
-    int64_t Bytes = MI->getOperand(0).getImm();
+    int64_t Words = MI->getOperand(0).getImm();
     SmallString<32> Buf;
     raw_svector_ostream BOS(Buf);
-    BOS << Bytes / 4 << " words";
+    BOS << Words << " words";
     if (!Annot.empty())
       BOS << "; " << Annot;
     printAnnotation(O, BOS.str());

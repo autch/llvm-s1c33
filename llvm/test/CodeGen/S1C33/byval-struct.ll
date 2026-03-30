@@ -13,7 +13,7 @@ declare void @takes_mixed(i32, ptr byval(%struct.S8) align 4, i32)
 ; 28-byte struct (7 words): ALL on stack, none in registers
 define void @call_s28(ptr %p) {
 ; CHECK-LABEL: call_s28:
-; CHECK: sub %sp, 28
+; CHECK: sub %sp, 7
 ; CHECK-NOT: ld.w %r12, [%r
 ; CHECK-NOT: ld.w %r13, [%r
 ; CHECK-NOT: ld.w %r14, [%r
@@ -26,7 +26,7 @@ define void @call_s28(ptr %p) {
 ; 8-byte struct (2 words): ALL on stack
 define void @call_s8(ptr %p) {
 ; CHECK-LABEL: call_s8:
-; CHECK: sub %sp, 8
+; CHECK: sub %sp, 2
 ; CHECK: ld.w [%r{{[0-9]+}}],
 ; CHECK: call takes_s8
   call void @takes_s8(ptr byval(%struct.S8) align 4 %p)
@@ -36,7 +36,7 @@ define void @call_s8(ptr %p) {
 ; Mixed: scalar i32 in R12, struct on stack, scalar i32 in R13
 define void @call_mixed(i32 %a, ptr %p, i32 %b) {
 ; CHECK-LABEL: call_mixed:
-; CHECK: sub %sp, 8
+; CHECK: sub %sp, 2
 ; Struct words stored to stack; scalar b moves to R13 (was R14)
 ; Scheduler may reorder the mov and stores.
 ; CHECK-DAG: ld.w %r13, %r14

@@ -226,28 +226,82 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     }
   }
 
-  // SP-relative offsets are always non-negative (SP points to the bottom of
-  // the frame; objects are above it).  The 6-bit unsigned field covers 0..63.
-  // For larger offsets, prefix the instruction with one or two EXT instructions
-  // so that sign_extend({ext..., Offset[5:0]}) == Offset at run time.
+  // Handle _ri_off variants: the instruction selector may generate e.g.
+  // STH_ri_off %stack.N, explicit_off, %rs  when the address is
+  // (frameindex + constant).  We combine the FI-resolved SP offset with
+  // the explicit operand offset, convert to the _sp opcode, and remove
+  // the now-redundant explicit offset operand.
+  //
+  // Operand layout:
+  //   Stores  (FI at FIOperandNum=0): rb[FI], off[1], rs[2] → imm[0], rs[1]
+  //   Loads   (FI at FIOperandNum=1): rd[0], rb[FI=1], off[2] → rd[0], imm[1]
+  // In both cases the explicit offset operand is at FIOperandNum+1.
+  static const std::pair<unsigned, unsigned> RiOffToSp[] = {
+      {S1C33::LDB_ri_off,  S1C33::LDB_sp},
+      {S1C33::LDUB_ri_off, S1C33::LDUB_sp},
+      {S1C33::LDH_ri_off,  S1C33::LDH_sp},
+      {S1C33::LDUH_ri_off, S1C33::LDUH_sp},
+      {S1C33::LDW_ri_off,  S1C33::LDW_sp},
+      {S1C33::STB_ri_off,  S1C33::STB_sp},
+      {S1C33::STH_ri_off,  S1C33::STH_sp},
+      {S1C33::STW_ri_off,  S1C33::STW_sp},
+  };
+  for (auto [RiOff, Sp] : RiOffToSp) {
+    if (MI.getOpcode() == RiOff) {
+      unsigned OffOperandNum = FIOperandNum + 1;
+      Offset += MI.getOperand(OffOperandNum).getImm();
+      MI.removeOperand(OffOperandNum);
+      MI.setDesc(TII.get(Sp));
+      break;
+    }
+  }
+
+  // S1C33 hardware interprets SP-relative immediates in scaled units:
+  //   ld.w/st.w: imm6 is in word units (×4)
+  //   ld.h/st.h/ld.uh/st.h: imm6 is in halfword units (×2)
+  //   ld.b/st.b/ld.ub: imm6 is in byte units (×1)
+  //   add/sub %sp: imm10 is in word units (×4)
+  // gcc33 encodes "ld.w [%sp+0xd]" for byte offset 52 (13 words × 4).
+  // We must divide the byte offset by the access scale before encoding.
   assert(Offset >= 0 && "Negative SP-relative frame offset");
 
-  if (!isUInt<6>(Offset)) {
+  // Determine scale factor from instruction opcode.
+  unsigned Scale = 4; // default: word
+  switch (MI.getOpcode()) {
+  case S1C33::LDB_sp: case S1C33::LDUB_sp:
+  case S1C33::STB_sp:
+    Scale = 1;
+    break;
+  case S1C33::LDH_sp: case S1C33::LDUH_sp:
+  case S1C33::STH_sp:
+    Scale = 2;
+    break;
+  default: // LDW_sp, STW_sp, ADDSP_i, SUBSP_i
+    Scale = 4;
+    break;
+  }
+  assert((Offset % Scale) == 0 &&
+         "SP-relative offset not aligned to access size");
+  int64_t ScaledOffset = Offset / Scale;
+
+  // The 6-bit unsigned field gives range [0, 63] in scaled units.
+  // For word access: 0–252 bytes.  For halfword: 0–126.  For byte: 0–63.
+  // Values > 63 require an ext prefix to extend the field.
+  if (!isUInt<6>(ScaledOffset)) {
     // Insert EXT prefix(es) before MI to extend the 6-bit immediate.
-    if (isInt<19>(Offset)) {
-      int64_t ext_imm13 = (Offset >> 6) & 0x1FFF;
+    if (isUInt<19>(ScaledOffset)) {
+      int64_t ext_imm13 = (ScaledOffset >> 6) & 0x1FFF;
       BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext_imm13);
     } else {
-      int64_t ext2_imm13 = (Offset >> 6)  & 0x1FFF;
-      int64_t ext1_imm13 = (Offset >> 19) & 0x1FFF;
+      int64_t ext2_imm13 = (ScaledOffset >> 6)  & 0x1FFF;
+      int64_t ext1_imm13 = (ScaledOffset >> 19) & 0x1FFF;
       BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext1_imm13);
       BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext2_imm13);
     }
   }
 
-  // Replace the FrameIndex operand with the computed SP-relative offset.
-  // The AsmPrinter will show Offset; the MC encoder uses Offset & 0x3F.
-  MI.getOperand(FIOperandNum).ChangeToImmediate(Offset);
+  // Replace the FrameIndex operand with the scaled SP-relative offset.
+  MI.getOperand(FIOperandNum).ChangeToImmediate(ScaledOffset);
   return false;
 }
 

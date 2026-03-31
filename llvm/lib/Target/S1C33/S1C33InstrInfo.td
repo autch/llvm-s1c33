@@ -167,7 +167,7 @@ def shiftimm : Operand<i32> {
   let ParserMatchClass = ShiftImm8AsmOperand;
 }
 
-// 13-bit signed immediate for ext+[%rb] offset addressing (single ext, [-4096, 4095]).
+// 13-bit unsigned immediate for ext+[%rb] offset addressing (single ext, [0, 8191]).
 // OPERAND_IMMEDIATE ensures the SelectionDAG ISel folds matching constants as TargetConstant
 // (not materializing them as registers).
 def simm13 : Operand<i32> {
@@ -182,8 +182,10 @@ def simm13 : Operand<i32> {
 def immSExt6  : PatLeaf<(imm), [{ return isInt<6>(N->getSExtValue()); }]>;
 def immZExt6  : PatLeaf<(imm), [{ return isUInt<6>(N->getZExtValue()); }]>;
 def immZExt10 : PatLeaf<(imm), [{ return isUInt<10>(N->getZExtValue()); }]>;
-// 13-bit signed immediate for ext+[%rb] offset addressing (single ext, [-4096, 4095]).
-def immSExt13 : PatLeaf<(imm), [{ return isInt<13>(N->getSExtValue()); }]>;
+// 13-bit unsigned immediate for ext+[%rb] offset addressing (single ext, [0, 8191]).
+// Class 1 memory instructions use unsigned immediates — ext offsets are zero-extended
+// by the CPU.  Negative offsets are NOT supported (they become large positive values).
+def immZExt13 : PatLeaf<(imm), [{ return isUInt<13>(N->getZExtValue()); }]>;
 // Shift immediate: 1-8 (4-bit field; 0 is a no-op, 1xxx=8).
 // Shifts cannot use ext prefix — max encodable count is 8.
 def immShift8 : PatLeaf<(imm), [{ return N->getZExtValue() >= 1 && N->getZExtValue() <= 8; }]>;
@@ -622,37 +624,39 @@ let mayLoad = 1, hasSideEffects = 1, SchedRW = [WriteLdPI] in {
 // Register-indirect with offset (ext+[%rb]) pseudos.
 //
 // Each pseudo expands in expandPostRAPseudo to: ext $off; ld.x [$rb].
-// The offset is 13-bit signed (single ext), covering [-4096, 4095] bytes.
+// The offset is 13-bit unsigned (single ext), covering [0, 8191] bytes.
+// Class 1 memory instructions use unsigned immediates — the CPU zero-extends
+// the ext-provided offset.  Negative offsets are NOT supported.
 // DAG patterns are added at the bottom of this file.
 //===----------------------------------------------------------------------===//
 
 let hasSideEffects = 0, mayLoad = 1, SchedRW = [WriteLd] in {
   def LDB_ri_off  : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
       "# ld.b\t$rd, [$rb+$off]",
-      [(set GR32:$rd, (sextloadi8  (add GR32:$rb, immSExt13:$off)))]>;
+      [(set GR32:$rd, (sextloadi8  (add GR32:$rb, immZExt13:$off)))]>;
   def LDUB_ri_off : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
       "# ld.ub\t$rd, [$rb+$off]",
-      [(set GR32:$rd, (zextloadi8  (add GR32:$rb, immSExt13:$off)))]>;
+      [(set GR32:$rd, (zextloadi8  (add GR32:$rb, immZExt13:$off)))]>;
   def LDH_ri_off  : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
       "# ld.h\t$rd, [$rb+$off]",
-      [(set GR32:$rd, (sextloadi16 (add GR32:$rb, immSExt13:$off)))]>;
+      [(set GR32:$rd, (sextloadi16 (add GR32:$rb, immZExt13:$off)))]>;
   def LDUH_ri_off : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
       "# ld.uh\t$rd, [$rb+$off]",
-      [(set GR32:$rd, (zextloadi16 (add GR32:$rb, immSExt13:$off)))]>;
+      [(set GR32:$rd, (zextloadi16 (add GR32:$rb, immZExt13:$off)))]>;
   def LDW_ri_off  : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rb, simm13:$off),
       "# ld.w\t$rd, [$rb+$off]",
-      [(set GR32:$rd, (load         (add GR32:$rb, immSExt13:$off)))]>;
+      [(set GR32:$rd, (load         (add GR32:$rb, immZExt13:$off)))]>;
 }
 let hasSideEffects = 0, mayStore = 1, SchedRW = [WriteALU] in {
   def STB_ri_off  : S1C33Pseudo<(outs), (ins GR32:$rb, simm13:$off, GR32:$rs),
       "# ld.b\t[$rb+$off], $rs",
-      [(truncstorei8  GR32:$rs, (add GR32:$rb, immSExt13:$off))]>;
+      [(truncstorei8  GR32:$rs, (add GR32:$rb, immZExt13:$off))]>;
   def STH_ri_off  : S1C33Pseudo<(outs), (ins GR32:$rb, simm13:$off, GR32:$rs),
       "# ld.h\t[$rb+$off], $rs",
-      [(truncstorei16 GR32:$rs, (add GR32:$rb, immSExt13:$off))]>;
+      [(truncstorei16 GR32:$rs, (add GR32:$rb, immZExt13:$off))]>;
   def STW_ri_off  : S1C33Pseudo<(outs), (ins GR32:$rb, simm13:$off, GR32:$rs),
       "# ld.w\t[$rb+$off], $rs",
-      [(store         GR32:$rs, (add GR32:$rb, immSExt13:$off))]>;
+      [(store         GR32:$rs, (add GR32:$rb, immZExt13:$off))]>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1190,8 +1194,8 @@ def : Pat<(store GR32:$rs, (S1C33Wrapper texternalsym:$sym)),
 // Additional patterns for "any-extend" loads (map to unsigned variants).
 // ImmAsTarget wraps the offset in a fresh TargetConstant to avoid node-sharing issues
 // where a shared Constant gets replaced by a materialized register.
-def : Pat<(extloadi8  (add GR32:$rb, immSExt13:$off)), (LDUB_ri_off GR32:$rb, (ImmAsTarget $off))>;
-def : Pat<(extloadi16 (add GR32:$rb, immSExt13:$off)), (LDUH_ri_off GR32:$rb, (ImmAsTarget $off))>;
+def : Pat<(extloadi8  (add GR32:$rb, immZExt13:$off)), (LDUB_ri_off GR32:$rb, (ImmAsTarget $off))>;
+def : Pat<(extloadi16 (add GR32:$rb, immZExt13:$off)), (LDUH_ri_off GR32:$rb, (ImmAsTarget $off))>;
 
 //===----------------------------------------------------------------------===//
 // CLASS 5 — Special register transfers (op2=00)

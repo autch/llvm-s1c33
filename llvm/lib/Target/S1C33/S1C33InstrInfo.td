@@ -186,6 +186,18 @@ def immZExt10 : PatLeaf<(imm), [{ return isUInt<10>(N->getZExtValue()); }]>;
 // Class 1 memory instructions use unsigned immediates — ext offsets are zero-extended
 // by the CPU.  Negative offsets are NOT supported (they become large positive values).
 def immZExt13 : PatLeaf<(imm), [{ return isUInt<13>(N->getZExtValue()); }]>;
+// 26-bit unsigned immediate for ext+ext+Class1 ALU 3-operand form.
+// Excludes values that fit in 6-bit unsigned (handled by 2-operand *_ri).
+def immZExt26Over63 : PatLeaf<(imm), [{
+  uint64_t V = N->getZExtValue();
+  return V > 63 && isUInt<26>(V);
+}]>;
+// Same but excluding signed 6-bit range (for and/or/xor which use signed imm6).
+def immZExt26NotSExt6 : PatLeaf<(imm), [{
+  int64_t S = N->getSExtValue();
+  uint64_t V = N->getZExtValue();
+  return !isInt<6>(S) && isUInt<26>(V);
+}]>;
 // Shift immediate: 1-8 (4-bit field; 0 is a no-op, 1xxx=8).
 // Shifts cannot use ext prefix — max encodable count is 8.
 def immShift8 : PatLeaf<(imm), [{ return N->getZExtValue() >= 1 && N->getZExtValue() <= 8; }]>;
@@ -730,6 +742,56 @@ def MOV_rr : S1C33InstC1ALU<0b011,
 }
 
 //===----------------------------------------------------------------------===//
+// CLASS 1 ALU — ext + 3-operand form (untied real instructions)
+//
+// ext imm / op %rd, %rs → rd = rs <op> zero_ext(imm)
+// Same encoding as the 2-operand *_rr forms above, but WITHOUT the
+// Constraints = "$rd = $rs1" tie.  The CPU interprets the presence of ext
+// as switching to 3-operand mode.
+//
+// These are NOT selected directly by ISel — they are emitted only by
+// ExpandExtPseudos when expanding *_rri pseudos below.
+//===----------------------------------------------------------------------===//
+let Defs = [PSR], hasSideEffects = 0, SchedRW = [WriteALU], isCodeGenOnly = 1 in {
+  def ADD_rr_ext : S1C33InstC1ALU<0b000,
+      (outs GR32:$rd), (ins GR32:$rs), "add\t$rd, $rs", []>;
+  def SUB_rr_ext : S1C33InstC1ALU<0b001,
+      (outs GR32:$rd), (ins GR32:$rs), "sub\t$rd, $rs", []>;
+  def AND_rr_ext : S1C33InstC1ALU<0b100,
+      (outs GR32:$rd), (ins GR32:$rs), "and\t$rd, $rs", []>;
+  def OR_rr_ext  : S1C33InstC1ALU<0b101,
+      (outs GR32:$rd), (ins GR32:$rs), "or\t$rd, $rs", []>;
+  def XOR_rr_ext : S1C33InstC1ALU<0b110,
+      (outs GR32:$rd), (ins GR32:$rs), "xor\t$rd, $rs", []>;
+}
+
+//===----------------------------------------------------------------------===//
+// 3-operand ALU pseudos — ext imm / op %rd, %rs
+//
+// Expanded by ExpandExtPseudos to ext(s) + *_rr_ext.
+// The immediate is UNSIGNED (zero-extended by ext).
+// For ADD/SUB: excludes immZExt6 range (handled by 2-operand *_ri).
+// For AND/OR/XOR: excludes immSExt6 range (handled by 2-operand *_ri).
+//===----------------------------------------------------------------------===//
+let Defs = [PSR], AddedComplexity = 5 in {
+  def ADD_rri : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs, i32imm:$imm),
+      "# ADD_rri $rd, $rs, $imm",
+      [(set GR32:$rd, (add GR32:$rs, immZExt26Over63:$imm))]>;
+  def SUB_rri : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs, i32imm:$imm),
+      "# SUB_rri $rd, $rs, $imm",
+      [(set GR32:$rd, (sub GR32:$rs, immZExt26Over63:$imm))]>;
+  def AND_rri : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs, i32imm:$imm),
+      "# AND_rri $rd, $rs, $imm",
+      [(set GR32:$rd, (and GR32:$rs, immZExt26NotSExt6:$imm))]>;
+  def OR_rri  : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs, i32imm:$imm),
+      "# OR_rri $rd, $rs, $imm",
+      [(set GR32:$rd, (or  GR32:$rs, immZExt26NotSExt6:$imm))]>;
+  def XOR_rri : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs, i32imm:$imm),
+      "# XOR_rri $rd, $rs, $imm",
+      [(set GR32:$rd, (xor GR32:$rs, immZExt26NotSExt6:$imm))]>;
+}
+
+//===----------------------------------------------------------------------===//
 // CLASS 2 — SP-relative displacement memory
 //
 // Encoding: |010|op1(3)|imm6(6)|rd(4)|
@@ -1129,7 +1191,17 @@ let Defs = [PSR], Constraints = "$rd = $rs" in {
 // Handles the common case where the DAGCombiner leaves (add x, -1) instead of (sub x, 1).
 def : Pat<(add GR32:$rs, negImmToUImm6:$imm),
           (SUB_ri GR32:$rs, (NegImm $imm))>;
-// (add %rs, -N) where N > 63 → SUB_ri32 with negated N
+// (add %rs, -N) where 64 ≤ N ≤ 2^26-1 → SUB_rri (3-operand form)
+// DAGCombiner canonicalizes (sub x, C) to (add x, -C), so we must match
+// the add-with-negative pattern to select the 3-operand subtract.
+def negImmZExt26Over63 : PatLeaf<(imm), [{
+  int64_t V = N->getSExtValue();
+  return V < -63 && (-V) <= ((1 << 26) - 1);
+}]>;
+let AddedComplexity = 5 in
+def : Pat<(add GR32:$rs, negImmZExt26Over63:$imm),
+          (SUB_rri GR32:$rs, (NegImm $imm))>;
+// (add %rs, -N) where N > 2^26-1 → SUB_ri32 (2-operand, needs full 32-bit)
 def negImmLarge : PatLeaf<(imm), [{ return N->getSExtValue() < -63; }]>;
 def : Pat<(add GR32:$rs, negImmLarge:$imm),
           (SUB_ri32 GR32:$rs, (NegImm $imm))>;

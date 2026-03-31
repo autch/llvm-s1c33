@@ -77,6 +77,23 @@ static int64_t emitExtForImm(MachineBasicBlock &MBB,
   return imm6;
 }
 
+/// Emit ext prefix(es) for a 3-operand ALU immediate (Class 1 + ext form).
+/// The ext provides the ENTIRE immediate (no imm6 tail from target instr).
+/// 1 ext: 13-bit unsigned.  2 exts: 26-bit unsigned.
+static void emitExtForC1Imm(MachineBasicBlock &MBB,
+                             MachineBasicBlock::iterator InsertPt,
+                             const DebugLoc &DL, const S1C33InstrInfo &TII,
+                             uint64_t V) {
+  assert(isUInt<26>(V) && "3-operand ALU immediate must fit in 26 bits");
+  if (isUInt<13>(V)) {
+    BuildMI(MBB, InsertPt, DL, TII.get(S1C33::EXT)).addImm(V);
+  } else {
+    // 2 exts: first ext has high 13 bits, second has low 13 bits.
+    BuildMI(MBB, InsertPt, DL, TII.get(S1C33::EXT)).addImm((V >> 13) & 0x1FFF);
+    BuildMI(MBB, InsertPt, DL, TII.get(S1C33::EXT)).addImm(V & 0x1FFF);
+  }
+}
+
 bool S1C33ExpandExtPseudos::expandMI(MachineBasicBlock &MBB,
                                       MachineBasicBlock::iterator MI,
                                       const S1C33InstrInfo &TII) {
@@ -121,6 +138,31 @@ bool S1C33ExpandExtPseudos::expandMI(MachineBasicBlock &MBB,
       BuildMI(MBB, MI, DL, TII.get(RealOpc), Rd).addReg(Rd).addImm(V);
     else
       BuildMI(MBB, MI, DL, TII.get(RealOpc), Rd).addReg(Rd).addImm(imm6);
+    MI->eraseFromParent();
+    return true;
+  }
+
+  // 3-operand ALU: ext imm / op %rd, %rs → rd = rs <op> zero_ext(imm)
+  case S1C33::ADD_rri:
+  case S1C33::SUB_rri:
+  case S1C33::AND_rri:
+  case S1C33::OR_rri:
+  case S1C33::XOR_rri: {
+    Register Rd = MI->getOperand(0).getReg();
+    Register Rs = MI->getOperand(1).getReg();
+    uint64_t V = MI->getOperand(2).getImm();
+
+    unsigned RealOpc;
+    switch (MI->getOpcode()) {
+    case S1C33::ADD_rri: RealOpc = S1C33::ADD_rr_ext; break;
+    case S1C33::SUB_rri: RealOpc = S1C33::SUB_rr_ext; break;
+    case S1C33::AND_rri: RealOpc = S1C33::AND_rr_ext; break;
+    case S1C33::OR_rri:  RealOpc = S1C33::OR_rr_ext;  break;
+    default:             RealOpc = S1C33::XOR_rr_ext;  break;
+    }
+
+    emitExtForC1Imm(MBB, MI, DL, TII, V);
+    BuildMI(MBB, MI, DL, TII.get(RealOpc), Rd).addReg(Rs);
     MI->eraseFromParent();
     return true;
   }

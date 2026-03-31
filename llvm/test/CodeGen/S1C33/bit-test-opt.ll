@@ -6,13 +6,14 @@
 ; (or icmp slt i8 x, 0) which then expands to 3×sll + 3×sra on S1C33
 ; because max shift is 8.  The PerformDAGCombine hook in S1C33ISelLowering
 ; recognizes these patterns and converts them to  AND(x, signbit) != 0
-; which lowers to: ext 2; and rx, 0; cmp rx, 0; jrne/jreq
+; which lowers to ext + and (3-operand form) + cmp + jrne/jreq
 
 ; CHECK-LABEL: test_hi_bit_branch:
 ; Checks that no 3×sll+3×sra sign-extension sequence is emitted.
 ; CHECK-NOT: sll {{%r[0-9]+}}, 8
 ; CHECK-NOT: sra {{%r[0-9]+}}, 8
-; CHECK: ext 2
+; 0x80 = 128 → ext 128 / and %rd, %rs (3-operand)
+; CHECK: ext 128
 ; CHECK-NEXT: and
 define void @test_hi_bit_branch(i8 %x, ptr %dst) {
   ; (x & 0x80) != 0 → InstCombine → icmp sgt i8 x, -1
@@ -30,7 +31,7 @@ no:
 ; icmp slt i8 x, 0 is the same sign-bit check.
 ; CHECK-NOT: sll {{%r[0-9]+}}, 8
 ; CHECK-NOT: sra {{%r[0-9]+}}, 8
-; CHECK: ext 2
+; CHECK: ext 128
 ; CHECK-NEXT: and
 define void @test_sign_lt0(i8 %x, ptr %dst) {
   %cond = icmp slt i8 %x, 0
@@ -46,7 +47,7 @@ no:
 ; CHECK-LABEL: test_hi_bit_loop:
 ; The key pattern from fpkplay/decode.c: i8 phi in a loop compared against -1.
 ; Must not emit any 8-bit shift sequence.
-; CHECK: ext 2
+; CHECK: ext 128
 ; CHECK-NEXT: and
 ; CHECK-NOT: sll {{%r[0-9]+}}, 8
 ; CHECK-NOT: sra {{%r[0-9]+}}, 8
@@ -77,11 +78,10 @@ exit:
 ; Same optimization for i16 sign bit (bit 15 = 0x8000).
 ; CHECK-NOT: sll {{%r[0-9]+}}, 8
 ; CHECK-NOT: sra {{%r[0-9]+}}, 8
-; ext 60 + and encodes 0x8000 (= 60<<6 | 0 = 0x8000? no: 60<<6=3840, not 32768)
-; Actually ext N; and %r, 0  where N = 0x8000 >> 6 = 512 = 0x200
-; ext 0x200 = two-ext: ext 8; ext (... ); and
-; Just check no shifts remain:
-; CHECK: and
+; 0x8000 = 32768 → ext 4 / ext 0 / and (3-operand, 2 exts)
+; CHECK: ext 4
+; CHECK-NEXT: ext 0
+; CHECK-NEXT: and
 define void @test_i16_sign(i16 %x, ptr %dst) {
   %cond = icmp sgt i16 %x, -1
   br i1 %cond, label %yes, label %no

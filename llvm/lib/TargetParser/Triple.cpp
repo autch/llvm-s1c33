@@ -2132,6 +2132,7 @@ bool Triple::isLittleEndian() const {
   case Triple::renderscript64:
   case Triple::riscv32:
   case Triple::riscv64:
+  case Triple::s1c33:
   case Triple::shave:
   case Triple::sparcel:
   case Triple::spir64:

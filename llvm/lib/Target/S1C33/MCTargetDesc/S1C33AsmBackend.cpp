@@ -147,8 +147,15 @@ public:
     }
   }
 
-  // Return the relaxed (EXT1) opcode for a branch/call opcode, or the same
+  // Return the relaxed opcode for a branch/call opcode, or the same
   // opcode if not relaxable.
+  //
+  // LDW_SYM_EXT0 relaxes directly to LDW_SYM_EXT2 (skipping EXT1) to avoid
+  // a two-step relaxation chain that breaks the MCAssembler's relaxOnce loop
+  // when the section has few fragments (e.g. with -ffunction-sections or LTO).
+  // The inner loop's MaxIter budget is based on fragment count; a two-step
+  // chain can exhaust it before the final layoutSection call, leaving stale
+  // fragment offsets and causing the writeSectionData size assertion to fail.
   static unsigned getRelaxedOpcode(unsigned Op) {
     switch (Op) {
     case S1C33::JRGT:     return S1C33::JRGT_EXT1;
@@ -165,7 +172,7 @@ public:
     case S1C33::JP_D_i:   return S1C33::JP_D_EXT1;
     case S1C33::CALL_i:   return S1C33::CALL_EXT1;
     case S1C33::CALL_sym:      return S1C33::CALL_EXT1;
-    case S1C33::LDW_SYM_EXT0: return S1C33::LDW_SYM_EXT1;
+    case S1C33::LDW_SYM_EXT0: return S1C33::LDW_SYM_EXT2; // direct: 2→6 bytes
     case S1C33::LDW_SYM_EXT1: return S1C33::LDW_SYM_EXT2;
     default:                   return Op;
     }
@@ -187,10 +194,12 @@ public:
       return Sign8 < -128 || Sign8 > 127;
     }
 
-    // abs_l controls EXT0 → EXT1 relaxation.
+    // abs_l controls EXT0 → EXT2 relaxation (direct, skipping EXT1).
+    // EXT0 always relaxes to EXT2 in one step to avoid a two-pass chain
+    // that breaks the MCAssembler relaxation loop for small sections.
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_l) {
       if (F.getOpcode() != S1C33::LDW_SYM_EXT0)
-        return false;  // In EXT1/EXT2: abs_m controls relaxation
+        return false;  // EXT2: no further relaxation
       const MCSymbol *Sym = Target.getAddSym();
       // Any non-absolute symbol's final address is determined by the linker.
       // The section-relative Value here is not the final address.  Always relax
@@ -200,10 +209,10 @@ public:
       return !isInt<6>((int64_t)Value);
     }
 
-    // abs_m controls EXT1 → EXT2 relaxation.
+    // abs_m controls EXT1 → EXT2 relaxation (for EXT1 emitted from assembly).
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_m) {
       if (F.getOpcode() != S1C33::LDW_SYM_EXT1)
-        return false;  // In EXT2: abs_h would control, but EXT2 is final
+        return false;  // EXT2: no further relaxation
       const MCSymbol *Sym = Target.getAddSym();
       if (Sym && !Sym->isAbsolute())
         return true;   // Non-absolute: final address not known, use full form

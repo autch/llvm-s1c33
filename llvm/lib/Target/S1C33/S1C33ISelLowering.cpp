@@ -179,7 +179,9 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
 
   // Conditional branches: lower BR_CC to S1C33ISD::CMP + S1C33ISD::BRCOND.
   setOperationAction(ISD::BR_CC,    MVT::i32,   Custom);
-  setOperationAction(ISD::SELECT_CC, MVT::i32,  Custom);
+  // SELECT: no conditional move on S1C33; lower to SELECT_CC(cond, 0, T, F, NE)
+  setOperationAction(ISD::SELECT,    MVT::i32,   Custom);
+  setOperationAction(ISD::SELECT_CC, MVT::i32,   Custom);
   // BRCOND requires a boolean condition — expand to BR_CC instead.
   setOperationAction(ISD::BRCOND,   MVT::Other, Expand);
   // SETCC produces a boolean i32 (0 or 1) from a comparison.
@@ -263,6 +265,7 @@ SDValue S1C33TargetLowering::LowerOperation(SDValue Op,
     llvm_unreachable("Unimplemented custom lowering");
 
   case ISD::BR_CC:    return LowerBR_CC(Op, DAG);
+  case ISD::SELECT:   return LowerSELECT(Op, DAG);
   case ISD::SELECT_CC: return LowerSELECT_CC(Op, DAG);
   case ISD::SETCC:    return LowerSETCC(Op, DAG);
   case ISD::VASTART:  return LowerVASTART(Op, DAG);
@@ -680,6 +683,29 @@ SDValue S1C33TargetLowering::LowerVACOPY(SDValue Op,
                              MachinePointerInfo(SrcSV));
   return DAG.getStore(Ptr.getValue(1), DL, Ptr, DstPtr,
                       MachinePointerInfo(DstSV));
+}
+
+// Lower ISD::SELECT (boolean condition) to S1C33ISD::SELECT_CC.
+// The S1C33 has no conditional-move instruction; convert:
+//   select cond, TrueVal, FalseVal
+// to:
+//   S1C33ISD::SELECT_CC(cond, 0, TrueVal, FalseVal, NE)
+// which expands via EmitInstrWithCustomInserter using a CMP + conditional branch.
+SDValue S1C33TargetLowering::LowerSELECT(SDValue Op,
+                                          SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDValue Cond = Op.getOperand(0);
+  SDValue TrueVal = Op.getOperand(1);
+  SDValue FalseVal = Op.getOperand(2);
+
+  // Ensure condition is i32 (it may be i1 after LTO IPO).
+  if (Cond.getValueType() != MVT::i32)
+    Cond = DAG.getZExtOrTrunc(Cond, DL, MVT::i32);
+
+  SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
+  return DAG.getNode(S1C33ISD::SELECT_CC, DL, Op.getValueType(),
+                     Cond, Zero, TrueVal, FalseVal,
+                     DAG.getConstant(S1C33CC::NE, DL, MVT::i32));
 }
 
 // Lower ISD::SELECT_CC to S1C33ISD::SELECT_CC, which becomes the SELECT pseudo

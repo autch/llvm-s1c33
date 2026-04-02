@@ -702,7 +702,10 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   AddLinkerInputs(TC, Inputs, Args, CmdArgs, JA);
 
-  if (TC.ShouldLinkCXXStdlib(Args)) {
+  if (TC.ShouldLinkCXXStdlib(Args) &&
+      Triple.getArch() != llvm::Triple::s1c33) {
+    // S1C33: C++ runtime is in libcxxrt.a (inside --start-group below).
+    // No libc++ or libm needed.
     bool OnlyLibstdcxxStatic = Args.hasArg(options::OPT_static_libstdcxx) &&
                                !Args.hasArg(options::OPT_static);
     if (OnlyLibstdcxxStatic)
@@ -719,6 +722,7 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       // Using --start-group/--end-group to handle circular references between
       // libraries (e.g. libio calls libstring, liblib calls libmath).
       CmdArgs.push_back("--start-group");
+      CmdArgs.push_back("-lcxxrt");
       CmdArgs.push_back("-lpceapi");
       CmdArgs.push_back("-lio");
       CmdArgs.push_back("-llib");

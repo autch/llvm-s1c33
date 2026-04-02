@@ -544,6 +544,10 @@ let mayLoad = 1, hasSideEffects = 0, SchedRW = [WriteLd] in {
 def : Pat<(i32 (extloadi8  GR32:$rb)), (LDUB_ri GR32:$rb)>;
 def : Pat<(i32 (extloadi16 GR32:$rb)), (LDUH_ri GR32:$rb)>;
 
+// i1 (bool) loads: a bool occupies one byte in memory; treat as byte load.
+def : Pat<(i32 (zextloadi1 GR32:$rb)), (LDUB_ri GR32:$rb)>;
+def : Pat<(i32 (extloadi1  GR32:$rb)), (LDUB_ri GR32:$rb)>;
+
 // Stores — op2=00; rd field holds the source register
 let mayStore = 1, hasSideEffects = 0, SchedRW = [WriteALU] in {
   // ld.b [%rb],%rd  byte store  (op1=101) → 0x3400|(rb<<4)|rd
@@ -845,9 +849,12 @@ def : Pat<(i32 (sextloadi8    (frameindex:$fi))), (LDB_sp  $fi)>;
 def : Pat<(i32 (zextloadi8    (frameindex:$fi))), (LDUB_sp $fi)>;
 def : Pat<(i32 (sextloadi16   (frameindex:$fi))), (LDH_sp  $fi)>;
 def : Pat<(i32 (zextloadi16   (frameindex:$fi))), (LDUH_sp $fi)>;
+def : Pat<(i32 (zextloadi1    (frameindex:$fi))), (LDUB_sp $fi)>;
+def : Pat<(i32 (extloadi1     (frameindex:$fi))), (LDUB_sp $fi)>;
 def : Pat<(store     GR32:$src, (frameindex:$fi)), (STW_sp $fi, GR32:$src)>;
 def : Pat<(truncstorei8  GR32:$src, (frameindex:$fi)), (STB_sp $fi, GR32:$src)>;
 def : Pat<(truncstorei16 GR32:$src, (frameindex:$fi)), (STH_sp $fi, GR32:$src)>;
+
 
 //===----------------------------------------------------------------------===//
 // CLASS 3 — 6-bit immediate ALU
@@ -1253,6 +1260,24 @@ def : Pat<(i32 (load (S1C33Wrapper tglobaladdr:$sym))),
           (LDW_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
 def : Pat<(i32 (load (S1C33Wrapper texternalsym:$sym))),
           (LDW_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
+
+// Byte/bool loads from global/external symbol address.
+def : Pat<(i32 (zextloadi8 (S1C33Wrapper tglobaladdr:$sym))),
+          (LDUB_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
+def : Pat<(i32 (zextloadi8 (S1C33Wrapper texternalsym:$sym))),
+          (LDUB_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
+def : Pat<(i32 (sextloadi8 (S1C33Wrapper tglobaladdr:$sym))),
+          (LDB_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
+def : Pat<(i32 (sextloadi8 (S1C33Wrapper texternalsym:$sym))),
+          (LDB_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
+def : Pat<(i32 (zextloadi1 (S1C33Wrapper tglobaladdr:$sym))),
+          (LDUB_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
+def : Pat<(i32 (zextloadi1 (S1C33Wrapper texternalsym:$sym))),
+          (LDUB_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
+def : Pat<(i32 (extloadi1 (S1C33Wrapper tglobaladdr:$sym))),
+          (LDUB_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
+def : Pat<(i32 (extloadi1 (S1C33Wrapper texternalsym:$sym))),
+          (LDUB_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
 
 // Store word to global/external symbol address.
 def : Pat<(store GR32:$rs, (S1C33Wrapper tglobaladdr:$sym)),

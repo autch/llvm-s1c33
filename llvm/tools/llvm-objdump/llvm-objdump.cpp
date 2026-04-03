@@ -1609,12 +1609,15 @@ collectLocalBranchTargets(ArrayRef<uint8_t> Bytes, MCInstrAnalysis *MIA,
                           const MCSubtargetInfo *STI, uint64_t SectionAddr,
                           uint64_t Start, uint64_t End,
                           std::unordered_map<uint64_t, std::string> &Labels) {
-  // Supported by certain targets.
+  // Supported by certain targets.  Any target that has registered an
+  // MCInstrAnalysis is eligible; the hardcoded list below covers targets
+  // that rely on the ISA-specific state machine (resetState/updateState).
   const bool isPPC = STI->getTargetTriple().isPPC();
   const bool isX86 = STI->getTargetTriple().isX86();
   const bool isAArch64 = STI->getTargetTriple().isAArch64();
   const bool isBPF = STI->getTargetTriple().isBPF();
-  if (!isPPC && !isX86 && !isAArch64 && !isBPF)
+  const bool isS1C33 = STI->getTargetTriple().getArch() == Triple::s1c33;
+  if (!isPPC && !isX86 && !isAArch64 && !isBPF && !isS1C33)
     return;
 
   if (MIA)

@@ -294,8 +294,19 @@ void S1C33Disassembler::applyPendingExtPCRel(MCInst &Inst, uint16_t RawInsn,
   }
   PendingExt.clear();
 
-  // Leave the operand as decoded by decodePCRelSimm8Operand (raw signed
-  // 8-bit displacement).  The extended result is shown only in the comment.
+  // Update the MCInst's immediate operand with the full extended displacement
+  // (halfword-unit signed offset) so that MCInstrAnalysis::evaluateBranch()
+  // can compute the correct target for ext-prefixed branches.
+  // decodePCRelSimm8Operand may have stored Sign8 or a symbolic operand.
+  // We only replace when an immediate is present; if a symbolizer was active
+  // and stored a symbolic operand instead, there is nothing to update here.
+  for (unsigned I = 0; I < Inst.getNumOperands(); ++I) {
+    if (Inst.getOperand(I).isImm()) {
+      Inst.getOperand(I).setImm(Extended);
+      break;
+    }
+  }
+
   emitExtComment(Extended, CStream);
 }
 

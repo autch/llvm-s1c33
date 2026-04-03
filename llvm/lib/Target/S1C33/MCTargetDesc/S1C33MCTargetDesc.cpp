@@ -10,6 +10,7 @@
 #include "S1C33InstPrinter.h"
 #include "S1C33MCAsmInfo.h"
 #include "TargetInfo/S1C33TargetInfo.h"
+#include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
@@ -29,6 +30,112 @@
 #include "S1C33GenRegisterInfo.inc"
 
 using namespace llvm;
+
+//===----------------------------------------------------------------------===//
+// MCInstrAnalysis
+//===----------------------------------------------------------------------===//
+
+namespace {
+class S1C33MCInstrAnalysis : public MCInstrAnalysis {
+public:
+  explicit S1C33MCInstrAnalysis(const MCInstrInfo *Info)
+      : MCInstrAnalysis(Info) {}
+
+  bool isBranch(const MCInst &Inst) const override {
+    switch (Inst.getOpcode()) {
+    // Unconditional PC-relative
+    case S1C33::JP_i:
+    case S1C33::JP_D_i:
+    // Unconditional register-indirect
+    case S1C33::JP_r:
+    // Conditional PC-relative (signed, unsigned, equal, not-equal)
+    case S1C33::JRGT:   case S1C33::JRGE:   case S1C33::JRLT:   case S1C33::JRLE:
+    case S1C33::JRUGT:  case S1C33::JRUGE:  case S1C33::JRULT:  case S1C33::JRULE:
+    case S1C33::JREQ:   case S1C33::JRNE:
+    case S1C33::JRGT_D: case S1C33::JRGE_D: case S1C33::JRLT_D: case S1C33::JRLE_D:
+    case S1C33::JRUGT_D:case S1C33::JRUGE_D:case S1C33::JRULT_D:case S1C33::JRULE_D:
+    case S1C33::JREQ_D: case S1C33::JRNE_D:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  bool isUnconditionalBranch(const MCInst &Inst) const override {
+    switch (Inst.getOpcode()) {
+    case S1C33::JP_i:
+    case S1C33::JP_D_i:
+    case S1C33::JP_r:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  bool isConditionalBranch(const MCInst &Inst) const override {
+    switch (Inst.getOpcode()) {
+    case S1C33::JRGT:   case S1C33::JRGE:   case S1C33::JRLT:   case S1C33::JRLE:
+    case S1C33::JRUGT:  case S1C33::JRUGE:  case S1C33::JRULT:  case S1C33::JRULE:
+    case S1C33::JREQ:   case S1C33::JRNE:
+    case S1C33::JRGT_D: case S1C33::JRGE_D: case S1C33::JRLT_D: case S1C33::JRLE_D:
+    case S1C33::JRUGT_D:case S1C33::JRUGE_D:case S1C33::JRULT_D:case S1C33::JRULE_D:
+    case S1C33::JREQ_D: case S1C33::JRNE_D:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  bool isCall(const MCInst &Inst) const override {
+    switch (Inst.getOpcode()) {
+    case S1C33::CALL_i:
+    case S1C33::CALL_r:
+    case S1C33::CALL_r_D:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  bool isReturn(const MCInst &Inst) const override {
+    switch (Inst.getOpcode()) {
+    case S1C33::RET:
+    case S1C33::RET_D:
+    case S1C33::RETI:
+    case S1C33::RETD:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  bool evaluateBranch(const MCInst &Inst, uint64_t Addr, uint64_t Size,
+                      uint64_t &Target) const override {
+    // Only handle actual branch/call instructions.
+    if (!isBranch(Inst) && !isCall(Inst))
+      return false;
+
+    // Only PC-relative instructions carry an immediate operand.
+    // Register-indirect branches (JP_r, CALL_r, CALL_r_D) have only a
+    // register operand and cannot be statically resolved.
+    for (unsigned I = 0; I < Inst.getNumOperands(); ++I) {
+      if (Inst.getOperand(I).isImm()) {
+        // Operand is a halfword-unit signed displacement (Sign8, or the
+        // extended Sign21/Sign34 written back by applyPendingExtPCRel).
+        // Byte offset = Imm * 2.  S1C33 has a 28-bit address space.
+        int64_t Imm = Inst.getOperand(I).getImm();
+        Target = (uint64_t)((int64_t)Addr + Imm * 2) & 0x0FFFFFFF;
+        return true;
+      }
+    }
+    return false;
+  }
+};
+} // namespace
+
+static MCInstrAnalysis *createS1C33MCInstrAnalysis(const MCInstrInfo *Info) {
+  return new S1C33MCInstrAnalysis(Info);
+}
 
 static MCInstrInfo *createS1C33MCInstrInfo() {
   MCInstrInfo *X = new MCInstrInfo();
@@ -102,4 +209,8 @@ LLVMInitializeS1C33TargetMC() {
 
   // Register the ELF streamer.
   TargetRegistry::RegisterELFStreamer(getTheS1C33Target(), createMCStreamer);
+
+  // Register the MCInstrAnalysis for branch target resolution (objdump labels).
+  TargetRegistry::RegisterMCInstrAnalysis(getTheS1C33Target(),
+                                          createS1C33MCInstrAnalysis);
 }

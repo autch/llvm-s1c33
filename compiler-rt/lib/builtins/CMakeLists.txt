@@ -763,6 +763,61 @@ set(avr_SOURCES
   ${GENERIC_SOURCES}
 )
 
+# Epson S1C33000 (e.g. S1C33209 in P/ECE)
+# Assembly overrides (from recovered fp.lib / idiv.lib) replace the generic C
+# implementations for FP operations and 32-bit integer division/modulo.
+# Note: subdf3/subsf3 are in adddf3.S/addsf3.S (same translation unit).
+set(s1c33_SOURCES
+  ${GENERIC_SOURCES}
+)
+# Remove C sources that are replaced by hand-tuned S1C33 assembly
+list(REMOVE_ITEM s1c33_SOURCES
+  adddf3.c    # replaced by s1c33/adddf3.S (also contains __subdf3)
+  addsf3.c    # replaced by s1c33/addsf3.S (also contains __subsf3)
+  subdf3.c    # included in s1c33/adddf3.S
+  subsf3.c    # included in s1c33/addsf3.S
+  muldf3.c    # replaced by s1c33/muldf3.S
+  mulsf3.c    # replaced by s1c33/mulsf3.S
+  divdf3.c    # replaced by s1c33/divdf3.S
+  divsf3.c    # replaced by s1c33/divsf3.S
+  negdf2.c    # replaced by s1c33/negdf2.S
+  negsf2.c    # replaced by s1c33/negsf2.S
+  extendsfdf2.c  # replaced by s1c33/extsfdf.S
+  truncdfsf2.c   # replaced by s1c33/trncdfsf.S
+  fixunsdfsi.c   # replaced by s1c33/fixdfui.S
+  fixunssfsi.c   # replaced by s1c33/fixsfui.S
+  floatsidf.c    # replaced by s1c33/flosidf.S
+  floatsisf.c    # replaced by s1c33/flosisf.S
+  comparedf2.c   # replaced by s1c33/fcmpd.S (uses PSR-flag ABI)
+  comparesf2.c   # replaced by s1c33/fcmps.S (uses PSR-flag ABI)
+  divsi3.c    # replaced by s1c33/divsi3.S (hardware div instructions)
+  udivsi3.c   # included in s1c33/divsi3.S
+  modsi3.c    # replaced by s1c33/modsi3.S (hardware div instructions)
+  umodsi3.c   # included in s1c33/modsi3.S
+)
+# Append the S1C33-specific assembly overrides
+list(APPEND s1c33_SOURCES
+  s1c33/adddf3.S    # __adddf3, __subdf3
+  s1c33/addsf3.S    # __addsf3, __subsf3
+  s1c33/muldf3.S
+  s1c33/mulsf3.S
+  s1c33/divdf3.S
+  s1c33/divsf3.S
+  s1c33/negdf2.S
+  s1c33/negsf2.S
+  s1c33/extsfdf.S   # __extendsfdf2
+  s1c33/trncdfsf.S  # __truncdfsf2
+  s1c33/fixdfui.S   # __fixunsdfsi
+  s1c33/fixsfui.S   # __fixunssfsi
+  s1c33/flosidf.S   # __floatsidf
+  s1c33/flosisf.S   # __floatsisf
+  s1c33/fcmpd.S     # __fcmpd (PSR-flag comparison, not int-returning)
+  s1c33/fcmps.S     # __fcmps (PSR-flag comparison, not int-returning)
+  s1c33/scan64.S    # __scan64 (internal helper used by fp functions)
+  s1c33/divsi3.S    # __divsi3, __udivsi3 (hardware div0s/div1/div2s/div3s)
+  s1c33/modsi3.S    # __modsi3, __umodsi3
+)
+
 # hexagon arch
 set(hexagon_SOURCES
   hexagon/common_entry_exit_abi1.S

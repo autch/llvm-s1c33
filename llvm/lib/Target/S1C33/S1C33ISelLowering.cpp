@@ -83,6 +83,9 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   // isel patterns (tglobaladdr, texternalsym) can match them.
   setOperationAction(ISD::GlobalAddress,  MVT::i32, Custom);
   setOperationAction(ISD::ExternalSymbol, MVT::i32, Custom);
+  // ConstantPool addresses (e.g. De Bruijn tables from CTTZ expansion) must be
+  // lowered like GlobalAddress — materialize the address via ext+ld.w sequences.
+  setOperationAction(ISD::ConstantPool,   MVT::i32, Custom);
 
   // S1C33 is not in the generated RuntimeLibcallsImpl target table
   // (setTargetRuntimeLibcallSets has no S1C33 entry), so AvailableLibcallImpls
@@ -94,11 +97,20 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   setLibcallImpl(RTLIB::MEMMOVE, RTLIB::impl_memmove);
   setLibcallImpl(RTLIB::MEMSET,  RTLIB::impl_memset);
 
-  // Integer division/remainder — implemented in P/ECE SDK idiv.lib.
+  // Integer division/remainder — 32-bit: P/ECE SDK idiv.lib.
   setLibcallImpl(RTLIB::SDIV_I32,  RTLIB::impl___divsi3);
   setLibcallImpl(RTLIB::UDIV_I32,  RTLIB::impl___udivsi3);
   setLibcallImpl(RTLIB::SREM_I32,  RTLIB::impl___modsi3);
   setLibcallImpl(RTLIB::UREM_I32,  RTLIB::impl___umodsi3);
+  // 64-bit integer arithmetic — compiler-rt builtins.
+  setLibcallImpl(RTLIB::MUL_I64,  RTLIB::impl___muldi3);
+  setLibcallImpl(RTLIB::SDIV_I64, RTLIB::impl___divdi3);
+  setLibcallImpl(RTLIB::UDIV_I64, RTLIB::impl___udivdi3);
+  setLibcallImpl(RTLIB::SREM_I64, RTLIB::impl___moddi3);
+  setLibcallImpl(RTLIB::UREM_I64, RTLIB::impl___umoddi3);
+  setLibcallImpl(RTLIB::SHL_I64,  RTLIB::impl___ashldi3);
+  setLibcallImpl(RTLIB::SRL_I64,  RTLIB::impl___lshrdi3);
+  setLibcallImpl(RTLIB::SRA_I64,  RTLIB::impl___ashrdi3);
 
   // Floating-point arithmetic — implemented in P/ECE SDK fp.lib.
   setLibcallImpl(RTLIB::ADD_F32,  RTLIB::impl___addsf3);
@@ -119,6 +131,8 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   setLibcallImpl(RTLIB::FPTOUINT_F64_I32, RTLIB::impl___fixunsdfsi);
   setLibcallImpl(RTLIB::SINTTOFP_I32_F32, RTLIB::impl___floatsisf);
   setLibcallImpl(RTLIB::SINTTOFP_I32_F64, RTLIB::impl___floatsidf);
+  setLibcallImpl(RTLIB::UINTTOFP_I32_F32, RTLIB::impl___floatunsisf);
+  setLibcallImpl(RTLIB::UINTTOFP_I32_F64, RTLIB::impl___floatunsidf);
 
   // Floating-point comparisons — fp.lib (__fcmps/__fcmpd wrappers).
   // LLVM uses __eqsf2 / __unorddf2 etc. as the canonical comparison libcalls.
@@ -163,6 +177,7 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   // register-to-register instructions.  Mark Legal so ISel matches the
   // LDB_rr / LDH_rr patterns (1 instruction) instead of expanding to
   // shift pairs (6 instructions for i8, 4 for i16).
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1,  Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8,  Legal);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Legal);
 
@@ -197,6 +212,20 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::VAARG,   MVT::Other, Expand);
   setOperationAction(ISD::VACOPY,  MVT::Other, Custom);
   setOperationAction(ISD::VAEND,   MVT::Other, Expand);
+
+  // S1C33 has no count-leading/trailing zeros or popcount instructions.
+  // Expand to software sequences.
+  setOperationAction(ISD::CTTZ,  MVT::i32, Expand);
+  setOperationAction(ISD::CTLZ,  MVT::i32, Expand);
+  setOperationAction(ISD::CTPOP, MVT::i32, Expand);
+  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Expand);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Expand);
+
+  // 64-bit shift parts: lower SHL_PARTS/SRL_PARTS/SRA_PARTS to sequences of
+  // 32-bit operations plus a SELECT_CC to handle the >= 32 case.
+  setOperationAction(ISD::SHL_PARTS, MVT::i32, Custom);
+  setOperationAction(ISD::SRL_PARTS, MVT::i32, Custom);
+  setOperationAction(ISD::SRA_PARTS, MVT::i32, Custom);
 
   // Register DAG combines:
   // - BR_CC, SETCC: sign-bit test optimization (sext_inreg+cmp → and+cmp)
@@ -268,6 +297,9 @@ SDValue S1C33TargetLowering::LowerOperation(SDValue Op,
   case ISD::SELECT:   return LowerSELECT(Op, DAG);
   case ISD::SELECT_CC: return LowerSELECT_CC(Op, DAG);
   case ISD::SETCC:    return LowerSETCC(Op, DAG);
+  case ISD::SHL_PARTS: return LowerSHL_PARTS(Op, DAG);
+  case ISD::SRL_PARTS: return LowerSRL_PARTS(Op, DAG);
+  case ISD::SRA_PARTS: return LowerSRA_PARTS(Op, DAG);
   case ISD::VASTART:  return LowerVASTART(Op, DAG);
   case ISD::VACOPY:   return LowerVACOPY(Op, DAG);
 
@@ -287,6 +319,20 @@ SDValue S1C33TargetLowering::LowerOperation(SDValue Op,
     auto *N = cast<ExternalSymbolSDNode>(Op);
     SDValue TES = DAG.getTargetExternalSymbol(N->getSymbol(), MVT::i32);
     return DAG.getNode(S1C33ISD::Wrapper, SDLoc(Op), MVT::i32, TES);
+  }
+
+  case ISD::ConstantPool: {
+    // Materialize the address of a constant pool entry (e.g. De Bruijn lookup
+    // tables from CTTZ expansion) using the same ext+ld.w path as GlobalAddress.
+    auto *N = cast<ConstantPoolSDNode>(Op);
+    SDValue TCP;
+    if (N->isMachineConstantPoolEntry())
+      TCP = DAG.getTargetConstantPool(N->getMachineCPVal(), MVT::i32,
+                                      N->getAlign(), N->getOffset());
+    else
+      TCP = DAG.getTargetConstantPool(N->getConstVal(), MVT::i32,
+                                      N->getAlign(), N->getOffset());
+    return DAG.getNode(S1C33ISD::Wrapper, SDLoc(Op), MVT::i32, TCP);
   }
   }
 }
@@ -1108,6 +1154,163 @@ static SDValue combineAndSraBias(SDNode *N, SelectionDAG &DAG) {
 
   SDValue X = LHS.getOperand(0);
   return emitBiasSelect(X, Mask, SDLoc(N), DAG);
+}
+
+//===----------------------------------------------------------------------===//
+// 64-bit shift parts
+//===----------------------------------------------------------------------===//
+//
+// S1C33 is a 32-bit target with no 64-bit shift instruction.  LLVM lowers
+// i64 shifts into SHL_PARTS / SRL_PARTS / SRA_PARTS nodes that each take
+// (lo, hi, shamt) and return (result_lo, result_hi).
+//
+// The generic algorithm (with an explicit SELECT to handle shamt >= 32):
+//
+//   SHL_PARTS(lo, hi, shamt):
+//     if shamt < 32:
+//       result_lo = lo << shamt
+//       result_hi = (hi << shamt) | (lo >> (32 - shamt))   [0 when shamt==0]
+//     else:
+//       result_lo = 0
+//       result_hi = lo << (shamt - 32)
+//
+//   SRL_PARTS(lo, hi, shamt):
+//     if shamt < 32:
+//       result_lo = (lo >> shamt) | (hi << (32 - shamt))   [0 when shamt==0]
+//       result_hi = hi >> shamt
+//     else:
+//       result_lo = hi >> (shamt - 32)
+//       result_hi = 0
+//
+//   SRA_PARTS(lo, hi, shamt) — same as SRL but arithmetic for hi and hi>>31:
+//     if shamt < 32:
+//       result_lo = (lo >> shamt) | (hi << (32 - shamt))   [0 when shamt==0]
+//       result_hi = hi >>a shamt
+//     else:
+//       result_lo = hi >>a (shamt - 32)
+//       result_hi = hi >>a 31
+
+// Helper: build (shamt == 0) ? zero : val, to avoid undefined shift by 32.
+static SDValue selectIfShAmtZero(SDValue Val, SDValue ShAmt, SDLoc DL,
+                                  SelectionDAG &DAG) {
+  SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
+  SDValue IsZero = DAG.getSetCC(DL, MVT::i32, ShAmt, Zero, ISD::SETEQ);
+  return DAG.getNode(ISD::SELECT, DL, MVT::i32, IsZero, Zero, Val);
+}
+
+SDValue S1C33TargetLowering::LowerSHL_PARTS(SDValue Op,
+                                             SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDValue Lo = Op.getOperand(0);
+  SDValue Hi = Op.getOperand(1);
+  SDValue ShAmt = Op.getOperand(2);
+
+  SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
+  SDValue Bits = DAG.getConstant(32, DL, MVT::i32);
+
+  // ExtraShAmt = shamt - 32  (negative when shamt < 32)
+  SDValue ExtraShAmt = DAG.getNode(ISD::SUB, DL, MVT::i32, ShAmt, Bits);
+  // RevShAmt = 32 - shamt
+  SDValue RevShAmt = DAG.getNode(ISD::SUB, DL, MVT::i32, Bits, ShAmt);
+
+  // Normal case (shamt < 32):
+  //   result_lo = lo << shamt
+  //   result_hi = (hi << shamt) | carry, where carry = (lo >> RevShAmt) if shamt!=0 else 0
+  SDValue Carry = selectIfShAmtZero(
+      DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, RevShAmt), ShAmt, DL, DAG);
+  SDValue NormLo = DAG.getNode(ISD::SHL, DL, MVT::i32, Lo, ShAmt);
+  SDValue NormHi = DAG.getNode(ISD::OR, DL, MVT::i32,
+                                DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, ShAmt),
+                                Carry);
+
+  // Big case (shamt >= 32):
+  //   result_lo = 0
+  //   result_hi = lo << (shamt - 32)
+  SDValue BigHi = DAG.getNode(ISD::SHL, DL, MVT::i32, Lo, ExtraShAmt);
+
+  // Select between cases: ExtraShAmt < 0 ↔ shamt < 32
+  SDValue IsBig = DAG.getSetCC(DL, MVT::i32, ExtraShAmt, Zero, ISD::SETGE);
+  SDValue ResultLo = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, Zero, NormLo);
+  SDValue ResultHi = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, BigHi, NormHi);
+
+  SDValue Parts[2] = {ResultLo, ResultHi};
+  return DAG.getMergeValues(Parts, DL);
+}
+
+SDValue S1C33TargetLowering::LowerSRL_PARTS(SDValue Op,
+                                             SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDValue Lo = Op.getOperand(0);
+  SDValue Hi = Op.getOperand(1);
+  SDValue ShAmt = Op.getOperand(2);
+
+  SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
+  SDValue Bits = DAG.getConstant(32, DL, MVT::i32);
+
+  SDValue ExtraShAmt = DAG.getNode(ISD::SUB, DL, MVT::i32, ShAmt, Bits);
+  SDValue RevShAmt = DAG.getNode(ISD::SUB, DL, MVT::i32, Bits, ShAmt);
+
+  // Normal case (shamt < 32):
+  //   result_lo = (lo >> shamt) | carry, carry = (hi << RevShAmt) if shamt!=0 else 0
+  //   result_hi = hi >> shamt
+  SDValue Carry = selectIfShAmtZero(
+      DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, RevShAmt), ShAmt, DL, DAG);
+  SDValue NormLo = DAG.getNode(ISD::OR, DL, MVT::i32,
+                                DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, ShAmt),
+                                Carry);
+  SDValue NormHi = DAG.getNode(ISD::SRL, DL, MVT::i32, Hi, ShAmt);
+
+  // Big case (shamt >= 32):
+  //   result_lo = hi >> (shamt - 32)
+  //   result_hi = 0
+  SDValue BigLo = DAG.getNode(ISD::SRL, DL, MVT::i32, Hi, ExtraShAmt);
+
+  SDValue IsBig = DAG.getSetCC(DL, MVT::i32, ExtraShAmt, Zero, ISD::SETGE);
+  SDValue ResultLo = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, BigLo, NormLo);
+  SDValue ResultHi = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, Zero, NormHi);
+
+  SDValue Parts[2] = {ResultLo, ResultHi};
+  return DAG.getMergeValues(Parts, DL);
+}
+
+SDValue S1C33TargetLowering::LowerSRA_PARTS(SDValue Op,
+                                             SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDValue Lo = Op.getOperand(0);
+  SDValue Hi = Op.getOperand(1);
+  SDValue ShAmt = Op.getOperand(2);
+
+  SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
+  SDValue Bits = DAG.getConstant(32, DL, MVT::i32);
+
+  SDValue ExtraShAmt = DAG.getNode(ISD::SUB, DL, MVT::i32, ShAmt, Bits);
+  SDValue RevShAmt = DAG.getNode(ISD::SUB, DL, MVT::i32, Bits, ShAmt);
+
+  // Sign-extension word: all bits = sign bit of hi
+  SDValue SignWord = DAG.getNode(ISD::SRA, DL, MVT::i32, Hi,
+                                 DAG.getConstant(31, DL, MVT::i32));
+
+  // Normal case (shamt < 32):
+  //   result_lo = (lo >> shamt) | carry, carry = (hi << RevShAmt) if shamt!=0 else 0
+  //   result_hi = hi >>a shamt
+  SDValue Carry = selectIfShAmtZero(
+      DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, RevShAmt), ShAmt, DL, DAG);
+  SDValue NormLo = DAG.getNode(ISD::OR, DL, MVT::i32,
+                                DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, ShAmt),
+                                Carry);
+  SDValue NormHi = DAG.getNode(ISD::SRA, DL, MVT::i32, Hi, ShAmt);
+
+  // Big case (shamt >= 32):
+  //   result_lo = hi >>a (shamt - 32)
+  //   result_hi = hi >>a 31  (sign extension)
+  SDValue BigLo = DAG.getNode(ISD::SRA, DL, MVT::i32, Hi, ExtraShAmt);
+
+  SDValue IsBig = DAG.getSetCC(DL, MVT::i32, ExtraShAmt, Zero, ISD::SETGE);
+  SDValue ResultLo = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, BigLo, NormLo);
+  SDValue ResultHi = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, SignWord, NormHi);
+
+  SDValue Parts[2] = {ResultLo, ResultHi};
+  return DAG.getMergeValues(Parts, DL);
 }
 
 SDValue S1C33TargetLowering::PerformDAGCombine(SDNode *N,

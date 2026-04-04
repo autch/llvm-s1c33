@@ -42,12 +42,14 @@ public:
     LongLongAlign = 32;    // 64-bit values only need 32-bit alignment on S1C33
     PointerWidth = PointerAlign = 32;
     SuitableAlign = 32;
-    SizeType = UnsignedInt;
-    PtrDiffType = SignedInt;
-    IntPtrType = SignedInt;
+    SizeType = UnsignedLong;
+    PtrDiffType = SignedLong;
+    IntPtrType = SignedLong;
     IntMaxType = SignedLongLong;
     Int64Type = SignedLongLong;
     SigAtomicType = SignedInt;
+    WCharType = UnsignedInt;
+    WIntType = UnsignedInt;
     DoubleAlign = LongDoubleAlign = 32; // double is 32-bit aligned on S1C33
     LongDoubleWidth = 64;
     LongDoubleFormat = &llvm::APFloat::IEEEdouble();

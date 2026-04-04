@@ -80,6 +80,16 @@ static MCOperand lowerOperand(const MachineOperand &MO, AsmPrinter &AP) {
         MCSymbolRefExpr::create(Sym, AP.OutContext));
   }
 
+  case MachineOperand::MO_ConstantPoolIndex: {
+    MCSymbol *Sym = AP.GetCPISymbol(MO.getIndex());
+    const MCExpr *Expr = MCSymbolRefExpr::create(Sym, AP.OutContext);
+    if (MO.getOffset() != 0)
+      Expr = MCBinaryExpr::createAdd(
+          Expr, MCConstantExpr::create(MO.getOffset(), AP.OutContext),
+          AP.OutContext);
+    return MCOperand::createExpr(Expr);
+  }
+
   default:
     // Fallback for unhandled operand types (register masks, etc.).
     return MCOperand::createImm(0);

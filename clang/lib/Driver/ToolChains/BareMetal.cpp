@@ -719,8 +719,11 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (Triple.getArch() == llvm::Triple::s1c33) {
       // P/ECE SDK default libraries in the canonical link order.
+      // libclang_rt.builtins-s1c33.a provides compiler-rt builtins (FP, integer
+      // division, 64-bit arithmetic) replacing the old libfp.a / libidiv.a.
       // Using --start-group/--end-group to handle circular references between
       // libraries (e.g. libio calls libstring, liblib calls libmath).
+      CmdArgs.push_back("-lclang_rt.builtins-s1c33");
       CmdArgs.push_back("--start-group");
       CmdArgs.push_back("-lcxxrt");
       CmdArgs.push_back("-lpceapi");
@@ -729,8 +732,6 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-lmath");
       CmdArgs.push_back("-lstring");
       CmdArgs.push_back("-lctype");
-      CmdArgs.push_back("-lfp");
-      CmdArgs.push_back("-lidiv");
       CmdArgs.push_back("--end-group");
     } else {
       CmdArgs.push_back("--start-group");

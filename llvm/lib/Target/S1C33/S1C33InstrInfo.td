@@ -1250,34 +1250,45 @@ let usesCustomInserter = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 //===----------------------------------------------------------------------===//
 
 // Address materialization: S1C33Wrapper(tglobaladdr/texternalsym) → LDW_SYM_EXT0.
-// LowerOperation(ISD::GlobalAddress/ExternalSymbol) wraps the TargetGlobalAddress
-// in S1C33ISD::Wrapper so isel can match it as a value-producing node.
+// LowerOperation(ISD::GlobalAddress/ExternalSymbol/ConstantPool) wraps the target
+// node in S1C33ISD::Wrapper so isel can match it as a value-producing node.
 def : Pat<(S1C33Wrapper tglobaladdr:$sym),  (LDW_SYM_EXT0 tglobaladdr:$sym)>;
 def : Pat<(S1C33Wrapper texternalsym:$sym), (LDW_SYM_EXT0 texternalsym:$sym)>;
+def : Pat<(S1C33Wrapper tconstpool:$sym),   (LDW_SYM_EXT0 tconstpool:$sym)>;
 
 // Load word from global/external symbol address.
 def : Pat<(i32 (load (S1C33Wrapper tglobaladdr:$sym))),
           (LDW_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
 def : Pat<(i32 (load (S1C33Wrapper texternalsym:$sym))),
           (LDW_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
+def : Pat<(i32 (load (S1C33Wrapper tconstpool:$sym))),
+          (LDW_ri (LDW_SYM_EXT0 tconstpool:$sym))>;
 
 // Byte/bool loads from global/external symbol address.
 def : Pat<(i32 (zextloadi8 (S1C33Wrapper tglobaladdr:$sym))),
           (LDUB_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
 def : Pat<(i32 (zextloadi8 (S1C33Wrapper texternalsym:$sym))),
           (LDUB_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
+def : Pat<(i32 (zextloadi8 (S1C33Wrapper tconstpool:$sym))),
+          (LDUB_ri (LDW_SYM_EXT0 tconstpool:$sym))>;
 def : Pat<(i32 (sextloadi8 (S1C33Wrapper tglobaladdr:$sym))),
           (LDB_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
 def : Pat<(i32 (sextloadi8 (S1C33Wrapper texternalsym:$sym))),
           (LDB_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
+def : Pat<(i32 (sextloadi8 (S1C33Wrapper tconstpool:$sym))),
+          (LDB_ri (LDW_SYM_EXT0 tconstpool:$sym))>;
 def : Pat<(i32 (zextloadi1 (S1C33Wrapper tglobaladdr:$sym))),
           (LDUB_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
 def : Pat<(i32 (zextloadi1 (S1C33Wrapper texternalsym:$sym))),
           (LDUB_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
+def : Pat<(i32 (zextloadi1 (S1C33Wrapper tconstpool:$sym))),
+          (LDUB_ri (LDW_SYM_EXT0 tconstpool:$sym))>;
 def : Pat<(i32 (extloadi1 (S1C33Wrapper tglobaladdr:$sym))),
           (LDUB_ri (LDW_SYM_EXT0 tglobaladdr:$sym))>;
 def : Pat<(i32 (extloadi1 (S1C33Wrapper texternalsym:$sym))),
           (LDUB_ri (LDW_SYM_EXT0 texternalsym:$sym))>;
+def : Pat<(i32 (extloadi1 (S1C33Wrapper tconstpool:$sym))),
+          (LDUB_ri (LDW_SYM_EXT0 tconstpool:$sym))>;
 
 // Store word to global/external symbol address.
 def : Pat<(store GR32:$rs, (S1C33Wrapper tglobaladdr:$sym)),

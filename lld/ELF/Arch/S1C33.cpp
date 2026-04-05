@@ -22,12 +22,23 @@
 //   R_S1C33_REL_M = 8   bits[21:9]  of byte_offset → ext_m imm13 (SRF split)
 //   R_S1C33_REL_L = 9   bits[8:1]   of byte_offset → call/branch sign8 (SRF split)
 //                        where byte_offset = target - call_addr (same as REL21)
+//   R_S1C33_REL_AH= 10  bits[25:13] of abs_byte_addr → ext1 imm13 (SRF 2×ext+mem[r8])
+//   R_S1C33_REL_AL= 11  bits[12:0]  of abs_byte_addr → ext2 imm13 (SRF 2×ext+mem[r8])
+//                        abs_byte_addr = absolute byte address of target (S + A)
 //
 // For SRF split PC-rel (REL_H/M/L), three relocations patch three consecutive
 // 16-bit instructions at offsets 0/+2/+4 from ext_h.  All three encode the
 // same byte_offset = target - call_addr where call_addr = P_H + 4.
 // Since P = P_H / P_H+2 / P_H+4 for REL_H/M/L respectively:
 //   byte_offset = (S-P_H)-4 = (S-P_M)-2 = (S-P_L)
+//
+// For SRF 2×ext+mem[r8] (REL_AH/AL), two relocations patch ext1 (offset 0)
+// and ext2 (offset +2).  The paired instruction at offset +4 is ld/st [%r8],
+// and since R8=0 in P/ECE, EA = zero_ext26((ext1_imm13<<13)|ext2_imm13) =
+// the absolute byte address of the target symbol.  Note: "REL_" in the SRF
+// name means "relocatable" (address needs patching), NOT "PC-relative".
+//   ext1 imm13 = abs_byte_addr[25:13]
+//   ext2 imm13 = abs_byte_addr[12:0]
 //
 //===----------------------------------------------------------------------===//
 
@@ -81,6 +92,9 @@ RelExpr S1C33::getRelExpr(RelType type, const Symbol &s,
   case R_S1C33_REL_M:
   case R_S1C33_REL_L:
     return R_PC;
+  case R_S1C33_REL_AH:
+  case R_S1C33_REL_AL:
+    return R_ABS;
   default:
     return R_ABS;
   }
@@ -135,6 +149,16 @@ int64_t S1C33::getImplicitAddend(const uint8_t *buf, RelType type) const {
   }
   case R_S1C33_REL_L: {
     return static_cast<int8_t>(buf[0]) * 2;
+  }
+  case R_S1C33_REL_AH: {
+    // High 13 bits of absolute byte address: addr = (imm13 << 13) | low13
+    uint32_t imm13 = buf[0] | ((buf[1] & 0x1F) << 8);
+    return static_cast<int64_t>(imm13) << 13;
+  }
+  case R_S1C33_REL_AL: {
+    // Low 13 bits of absolute byte address.
+    uint32_t imm13 = buf[0] | ((buf[1] & 0x1F) << 8);
+    return static_cast<int64_t>(imm13);
   }
   default:
     return 0;
@@ -231,6 +255,25 @@ void S1C33::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     int64_t byteOff = static_cast<int64_t>(val);
     // bits[8:1] of byte_offset = bits[7:0] of word_offset → sign8 field (Data[0])
     loc[0] = static_cast<uint8_t>((byteOff >> 1) & 0xFF);
+    break;
+  }
+
+  case R_S1C33_REL_AH: {
+    // First ext of a 2×ext+ld/st[%r8] sequence.
+    // R8=0 in P/ECE, so EA = zero_ext26((ext1<<13)|ext2) = absolute byte address.
+    // val = S + A (absolute byte address of target symbol).
+    // ext1 imm13 = val[25:13]
+    uint32_t imm13 = static_cast<uint32_t>((val >> 13) & 0x1FFF);
+    writeExt13(loc, imm13);
+    break;
+  }
+
+  case R_S1C33_REL_AL: {
+    // Second ext of a 2×ext+ld/st[%r8] sequence.
+    // val = S + A (absolute byte address of target symbol).
+    // ext2 imm13 = val[12:0]
+    uint32_t imm13 = static_cast<uint32_t>(val & 0x1FFF);
+    writeExt13(loc, imm13);
     break;
   }
 

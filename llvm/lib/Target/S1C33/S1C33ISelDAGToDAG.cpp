@@ -67,9 +67,79 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
   case ISD::FrameIndex: {
     // Convert ISD::FrameIndex to ISD::TargetFrameIndex so that TableGen
     // patterns using (frameindex:$fi) can match it in load/store addresses.
+    //
+    // However, when FrameIndex is used as a plain *value* (not the address
+    // operand of a load/store) — e.g. in a CopyToReg to pass an alloca
+    // address into a loop — TargetFrameIndex is a leaf with no VR. The
+    // InstrEmitter then calls getVR(TargetFrameIndex) and asserts because no
+    // virtual register was ever assigned for it.
+    //
+    // Detect this: if any use is NOT a load/store using this node as its
+    // base-address operand, wrap the TargetFrameIndex in an ADJFI pseudo
+    // (which produces a real VR and is later expanded by eliminateFrameIndex
+    // to LDW_from_SP + ADD_ri).  For purely address uses, TargetFrameIndex
+    // alone is sufficient and the *_sp patterns stay efficient.
     int FI = cast<FrameIndexSDNode>(Node)->getIndex();
     SDValue TFI = CurDAG->getTargetFrameIndex(FI, MVT::i32);
-    ReplaceNode(Node, TFI.getNode());
+
+    // Check all uses: if any use requires a real VR, wrap in ADJFI.
+    //
+    // DAG isel is top-down: by the time Select(FrameIndex) runs, parent nodes
+    // may already be machine opcodes.  Two kinds of machine-opcode users:
+    //
+    //  A) Memory instructions (LDW_sp, STW_sp, LDW_ri, ...) and ADJFI:
+    //     these hold a MO_FrameIndex operand which eliminateFrameIndex handles.
+    //     TargetFrameIndex is safe here.
+    //
+    //  B) All other machine opcodes (SELECT, ADD, CMP, ...):
+    //     they expect a register operand.  TargetFrameIndex would be emitted as
+    //     MO_FrameIndex and getReg() would assert later.
+    //     NeedsVR = true for these.
+    //
+    // For un-morphed ISD nodes, only ISD::LOAD/STORE with FrameIndex as the
+    // base pointer are safe; everything else (CopyToReg, ADD, SELECT, ...) needs
+    // a VR.
+    bool NeedsVR = false;
+    for (SDUse &Use : Node->uses()) {
+      SDNode *User = Use.getUser();
+      if (User->isMachineOpcode()) {
+        unsigned MachOpc = User->getMachineOpcode();
+        // ADJFI: designed to hold a TargetFrameIndex operand.
+        if (MachOpc == S1C33::ADJFI)
+          continue;
+        // Memory instructions have the address at SDNode operand 0.
+        // Only that position is safe with TargetFrameIndex; value operands
+        // (e.g. storing the address of a local variable) need a real VR.
+        const TargetInstrInfo *TII =
+            CurDAG->getSubtarget().getInstrInfo();
+        const MCInstrDesc &Desc = TII->get(MachOpc);
+        if ((Desc.mayLoad() || Desc.mayStore()) && Use.getOperandNo() == 0)
+          continue;
+        NeedsVR = true;
+        break;
+      }
+      // Un-morphed ISD node: safe only for load/store address uses.
+      unsigned UseOpc = User->getOpcode();
+      SDValue Addr;
+      if (UseOpc == ISD::LOAD)
+        Addr = cast<LoadSDNode>(User)->getBasePtr();
+      else if (UseOpc == ISD::STORE)
+        Addr = cast<StoreSDNode>(User)->getBasePtr();
+      if (Addr.getNode() != Node) {
+        NeedsVR = true;
+        break;
+      }
+    }
+
+    if (!NeedsVR) {
+      ReplaceNode(Node, TFI.getNode());
+    } else {
+      // Value use (e.g. CopyToReg, ADD): produce a proper VR via ADJFI.
+      // load/store users of this same node will get LDW_ri(ADJFI) instead of
+      // LDW_sp, which is correct though slightly less compact.
+      SDNode *Adj = CurDAG->getMachineNode(S1C33::ADJFI, DL, MVT::i32, TFI);
+      ReplaceNode(Node, Adj);
+    }
     return;
   }
 

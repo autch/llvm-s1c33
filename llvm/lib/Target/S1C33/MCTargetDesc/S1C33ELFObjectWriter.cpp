@@ -31,6 +31,8 @@ enum {
   R_S1C33_REL_H = 7, // bits[31:22] → ext_h for PC-rel (<<3)
   R_S1C33_REL_M = 8, // bits[21:9]  → ext_m for PC-rel
   R_S1C33_REL_L = 9, // bits[8:1]   → branch sign8 field
+  R_S1C33_REL_AH = 10, // bits[25:13] of word_offset → ext1 imm13 (2×ext+branch)
+  R_S1C33_REL_AL = 11, // bits[12:0]  of word_offset → ext2 imm13 (2×ext+branch)
 };
 
 namespace {

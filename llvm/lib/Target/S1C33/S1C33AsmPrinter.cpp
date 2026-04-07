@@ -38,6 +38,12 @@ public:
   StringRef getPassName() const override { return "S1C33 Assembly Printer"; }
 
   void emitInstruction(const MachineInstr *MI) override;
+
+  // Print a single MachineOperand to OS in S1C33 asm syntax.
+  void printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostream &O);
+
+  bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
+                       const char *ExtraCode, raw_ostream &O) override;
 };
 
 } // end anonymous namespace
@@ -107,6 +113,29 @@ static MCInst lowerToMCInst(const MachineInstr *MI, AsmPrinter &AP) {
     TmpInst.addOperand(lowerOperand(MO, AP));
   }
   return TmpInst;
+}
+
+void S1C33AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
+                                    raw_ostream &O) {
+  const MachineOperand &MO = MI->getOperand(OpNo);
+  switch (MO.getType()) {
+  case MachineOperand::MO_Register:
+    O << '%' << S1C33InstPrinter::getRegisterName(MO.getReg());
+    return;
+  case MachineOperand::MO_Immediate:
+    O << MO.getImm();
+    return;
+  default:
+    llvm_unreachable("not implemented for inline asm");
+  }
+}
+
+bool S1C33AsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
+                                       const char *ExtraCode, raw_ostream &O) {
+  if (ExtraCode && ExtraCode[0])
+    return AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, O);
+  printOperand(MI, OpNo, O);
+  return false;
 }
 
 void S1C33AsmPrinter::emitInstruction(const MachineInstr *MI) {

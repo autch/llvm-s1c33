@@ -1313,6 +1313,21 @@ SDValue S1C33TargetLowering::LowerSRA_PARTS(SDValue Op,
   return DAG.getMergeValues(Parts, DL);
 }
 
+std::pair<unsigned, const TargetRegisterClass *>
+S1C33TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                                                   StringRef Constraint,
+                                                   MVT VT) const {
+  if (Constraint.size() == 1) {
+    switch (Constraint[0]) {
+    case 'r':
+      return std::make_pair(0U, &S1C33::GR32RegClass);
+    default:
+      break;
+    }
+  }
+  return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+}
+
 SDValue S1C33TargetLowering::PerformDAGCombine(SDNode *N,
                                                 DAGCombinerInfo &DCI) const {
   SelectionDAG &DAG = DCI.DAG;

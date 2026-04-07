@@ -107,6 +107,10 @@ public:
                               Type *Ty, unsigned AS,
                               Instruction *I = nullptr) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
+
+  std::pair<unsigned, const TargetRegisterClass *>
+  getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                                StringRef Constraint, MVT VT) const override;
 };
 
 } // namespace llvm

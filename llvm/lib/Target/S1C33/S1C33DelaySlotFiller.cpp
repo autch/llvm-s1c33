@@ -88,6 +88,14 @@ bool S1C33DelaySlotFiller::isDelaySlotCandidate(
   // Reject instructions with side effects (e.g. hasSideEffects).
   if (MI.hasUnmodeledSideEffects())
     return false;
+  // Reject multi-cycle multiply instructions (D:- in the CPU manual).
+  // mlt.w and mltu.w take 5 cycles; mac takes 2n+4 cycles.
+  // Placing them in a delay slot would produce incorrect results.
+  {
+    unsigned Opc = MI.getOpcode();
+    if (Opc == S1C33::MLT_W || Opc == S1C33::MLTU_W || Opc == S1C33::MAC)
+      return false;
+  }
   // Reject instructions that define SP.  ret.d reads [SP] to obtain the
   // return address, and call.d writes [SP-4] before branching.  If an
   // SP-modifying instruction (add %sp / sub %sp) is placed in the delay

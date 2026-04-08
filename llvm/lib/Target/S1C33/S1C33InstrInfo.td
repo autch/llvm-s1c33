@@ -1051,7 +1051,8 @@ let Defs = [PSR], hasSideEffects = 0, Constraints = "$rd = $rs1", SchedRW = [Wri
 //   mirror: op1=101
 //===----------------------------------------------------------------------===//
 
-let hasSideEffects = 0, SchedRW = [WriteALU] in {
+// scan0/scan1 update PSR flags (C and Z; V and N cleared).
+let hasSideEffects = 0, Defs = [PSR], SchedRW = [WriteALU] in {
   // scan0 %rd, %rs  scan first 0 from MSB (op1=010, op2=10)
   def SCAN0 : S1C33InstC4Reg2<0b010, 0b10,
       (outs GR32:$rd), (ins GR32:$rs),
@@ -1062,7 +1063,10 @@ let hasSideEffects = 0, SchedRW = [WriteALU] in {
       (outs GR32:$rd), (ins GR32:$rs),
       "scan1\t$rd, $rs",
       [(set GR32:$rd, (ctlz GR32:$rs))]>;
+}
 
+// swap/mirror do NOT update PSR flags.
+let hasSideEffects = 0, SchedRW = [WriteALU] in {
   // swap %rd, %rs   swap upper/lower 16 bits (op1=100, op2=10)
   // Note: semantics from CPU manual - swaps the two halfwords of %rs into %rd.
   def SWAP : S1C33InstC4Reg2<0b100, 0b10,
@@ -1079,49 +1083,51 @@ let hasSideEffects = 0, SchedRW = [WriteALU] in {
 //===----------------------------------------------------------------------===//
 // CLASS 4 — Division step instructions
 //
-// Encoding: |100|op1(3)|11(2)|rs(4)|rd(4)|
+// Encoding: |100|op1(3)|11(2)|rs(4)|0000|
 // These implement S1C33000's software division algorithm (35 steps).
-// Results accumulate in rd (partial quotient/remainder).
+// Results accumulate in the implicit ALR/AHR special registers.
 // CPU Manual §4.3: div0s/div0u initialize; div1 steps; div2s/div3s finalize.
+//
+// All div instructions have rd=0000 hardcoded.  The divisor is %rs.
+// div3s has no register operands (rs=0000, rd=0000).
+// op1 values confirmed by user 2026-03-24.
 //===----------------------------------------------------------------------===//
 
-// div0s/div0u initialize the divide step sequence.
-// div1/div2s/div3s are 2-address (rd modified in place).
-// op1 values confirmed by user 2026-03-24.
 let hasSideEffects = 1, Defs = [PSR] in {
-  // div0s %rd, %rs  setup signed divide (op1=010, op2=11)
+  // div0s %rs  setup signed divide (op1=010, op2=11); reads ALR (dividend)
   def DIV0S : S1C33InstC4Reg2<0b010, 0b11,
-      (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
-      "div0s\t$rd, $rs", []> {
-    let Constraints = "$rd = $rs1";
+      (outs), (ins GR32:$rs),
+      "div0s\t$rs", []> {
+    let rd = 0b0000;
   }
 
-  // div0u %rd, %rs  setup unsigned divide (op1=011, op2=11)
+  // div0u %rs  setup unsigned divide (op1=011, op2=11); reads ALR (dividend)
   def DIV0U : S1C33InstC4Reg2<0b011, 0b11,
-      (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
-      "div0u\t$rd, $rs", []> {
-    let Constraints = "$rd = $rs1";
+      (outs), (ins GR32:$rs),
+      "div0u\t$rs", []> {
+    let rd = 0b0000;
   }
 
-  // div1 %rd, %rs   divide step (op1=100, op2=11)
+  // div1 %rs   divide step (op1=100, op2=11); reads/writes ALR, AHR
   def DIV1 : S1C33InstC4Reg2<0b100, 0b11,
-      (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
-      "div1\t$rd, $rs", []> {
-    let Constraints = "$rd = $rs1";
+      (outs), (ins GR32:$rs),
+      "div1\t$rs", []> {
+    let rd = 0b0000;
   }
 
-  // div2s %rd, %rs  signed divide adjust (op1=101, op2=11)
+  // div2s %rs  signed divide adjust (op1=101, op2=11); reads/writes ALR, AHR
   def DIV2S : S1C33InstC4Reg2<0b101, 0b11,
-      (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
-      "div2s\t$rd, $rs", []> {
-    let Constraints = "$rd = $rs1";
+      (outs), (ins GR32:$rs),
+      "div2s\t$rs", []> {
+    let rd = 0b0000;
   }
 
-  // div3s %rd, %rs  signed divide finalize (op1=110, op2=11)
+  // div3s  signed divide finalize (op1=110, op2=11); no register operands
   def DIV3S : S1C33InstC4Reg2<0b110, 0b11,
-      (outs GR32:$rd), (ins GR32:$rs1, GR32:$rs),
-      "div3s\t$rd, $rs", []> {
-    let Constraints = "$rd = $rs1";
+      (outs), (ins),
+      "div3s", []> {
+    let rs = 0b0000;
+    let rd = 0b0000;
   }
 }
 

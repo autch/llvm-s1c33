@@ -54,6 +54,19 @@ foreach i = 0-15 in {
 
 // Special registers (not in GPR encoding space).
 // CPU Manual §3.2: SP, PC, PSR, ALR, AHR.
+//
+// DWARF register numbering (this project's convention):
+//   SP=16, PC=17, PSR=18, ALR=19, AHR=20
+//
+// Note: the S1C33 %ss file has its own order (PSR=0, SP=1, ALR=2, AHR=3) and
+// PC is not part of %ss at all.  Neither hardware order maps cleanly to a
+// simple sequential scheme, so we assign DWARF numbers after the 16 GPRs in
+// logical order (SP first, then PC) as the canonical convention for this
+// toolchain.
+//
+// GDB RSP emulators must output the 'g' packet in this DWARF order:
+//   r0–r15, sp, pc, psr, alr, ahr
+// and the qXfer target-description XML must list registers in the same order.
 def SP  : S1C33Reg<16, "sp">,  DwarfRegNum<[16]>;
 def PC  : S1C33Reg<17, "pc">,  DwarfRegNum<[17]>;
 def PSR : S1C33Reg<18, "psr">, DwarfRegNum<[18]>;

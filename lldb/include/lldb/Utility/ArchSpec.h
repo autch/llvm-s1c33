@@ -236,6 +236,8 @@ public:
 
     eCore_wasm32,
 
+    eCore_s1c33, // EPSON S1C33000 family
+
     kNumCores,
 
     kCore_invalid,

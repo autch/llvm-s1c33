@@ -1366,6 +1366,13 @@ bool DisassemblerLLVMC::MCDisasmInstance::GetMCInst(const uint8_t *opcode_data,
   llvm::ArrayRef<uint8_t> data(opcode_data, opcode_data_len);
   llvm::MCDisassembler::DecodeStatus status;
 
+  // Some target decoders (e.g. S1C33) call tryAddingSymbolicOperand(), which
+  // asserts that CommentStream is non-null when a Symbolizer is present.
+  // LLDB sets a Symbolizer on the MCDisassembler (for symbol lookup callbacks)
+  // but never sets CommentStream.  Point it at nulls() so the assert is
+  // satisfied; the Symbolizer may write comment text there, but we only care
+  // about the symbolic MCOperand it adds to the instruction.
+  m_disasm_up->CommentStream = &llvm::nulls();
   status = m_disasm_up->getInstruction(mc_inst, size, data, pc, llvm::nulls());
   if (status == llvm::MCDisassembler::Success)
     return true;

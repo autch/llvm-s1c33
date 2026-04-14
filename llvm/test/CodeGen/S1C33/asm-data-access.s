@@ -39,15 +39,16 @@ sp_stores:
 # CHECK: ld.h	[%sp+12], %r2
 
 # CHECK-LABEL: <sp_ext>:
-# ext 1 gives offset range [0, 127]*4: ext(1)*64 + imm6(0) = 64 words = 256 bytes
+# With EXT, SP-relative class-2 uses a byte displacement directly.
+# ext 4 / ld.w [%sp+0] encodes byte offset 256.
 sp_ext:
-	ext   1
+	ext   4
 	ld.w  %r0, [%sp+0]
-	ext   1
+	ext   4
 	ld.w  [%sp+0], %r1
-# CHECK: ext	1
+# CHECK: ext	4
 # CHECK-NEXT: ld.w	%r0, [%sp+0]
-# CHECK: ext	1
+# CHECK: ext	4
 # CHECK-NEXT: ld.w	[%sp+0], %r1
 
 # CHECK-LABEL: <ri_loads>:

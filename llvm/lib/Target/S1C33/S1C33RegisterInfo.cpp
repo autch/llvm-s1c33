@@ -111,22 +111,17 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     // Emit: ld.w Dst, %sp — CLASS 5 special register read (NOT MOV_rr)
     BuildMI(MBB, II, DL, TII.get(S1C33::LDW_from_SP), Dst);
     if (Offset != 0) {
-      // ADD_ri uses uimm6 (0..63); ext is needed only when Offset > 63.
-      if (!isUInt<6>(Offset)) {
-        if (isInt<19>(Offset)) {
-          int64_t ext13 = (Offset >> 6) & 0x1FFF;
-          BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext13);
-        } else {
-          int64_t ext2 = (Offset >> 6)  & 0x1FFF;
-          int64_t ext1 = (Offset >> 19) & 0x1FFF;
-          BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext1);
-          BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext2);
-        }
+      if (isUInt<6>(Offset)) {
+        BuildMI(MBB, II, DL, TII.get(S1C33::ADD_ri), Dst)
+            .addReg(Dst)
+            .addImm(Offset);
+      } else {
+        // Use the late-expanded 3-operand pseudo so ext+add stays adjacent even
+        // with the post-RA scheduler enabled.
+        BuildMI(MBB, II, DL, TII.get(S1C33::ADD_rri), Dst)
+            .addReg(Dst)
+            .addImm(Offset);
       }
-      // Pass unsigned low 6 bits as the uimm6 immediate (0..63).
-      int64_t imm6 = static_cast<int64_t>(Offset & 0x3F);
-      BuildMI(MBB, II, DL, TII.get(S1C33::ADD_ri), Dst)
-          .addReg(Dst).addImm(imm6);
     }
     MI.eraseFromParent();
     return false;
@@ -182,22 +177,15 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
     BuildMI(MBB, II, DL, TII.get(S1C33::LDW_from_SP), Dst);
     if (TotalOffset != 0) {
-      // ADD_ri uses uimm6 (0..63); ext is needed only when TotalOffset > 63.
-      if (!isUInt<6>(TotalOffset)) {
-        if (isInt<19>(TotalOffset)) {
-          BuildMI(MBB, II, DL, TII.get(S1C33::EXT))
-              .addImm((TotalOffset >> 6) & 0x1FFF);
-        } else {
-          BuildMI(MBB, II, DL, TII.get(S1C33::EXT))
-              .addImm((TotalOffset >> 19) & 0x1FFF);
-          BuildMI(MBB, II, DL, TII.get(S1C33::EXT))
-              .addImm((TotalOffset >> 6) & 0x1FFF);
-        }
+      if (isUInt<6>(TotalOffset)) {
+        BuildMI(MBB, II, DL, TII.get(S1C33::ADD_ri), Dst)
+            .addReg(Dst)
+            .addImm(TotalOffset);
+      } else {
+        BuildMI(MBB, II, DL, TII.get(S1C33::ADD_rri), Dst)
+            .addReg(Dst)
+            .addImm(TotalOffset);
       }
-      int64_t imm6 = static_cast<int64_t>(TotalOffset & 0x3F);
-      BuildMI(MBB, II, DL, TII.get(S1C33::ADD_ri), Dst)
-          .addReg(Dst)
-          .addImm(imm6);
     }
     MI.eraseFromParent();
     return false;
@@ -256,13 +244,11 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     }
   }
 
-  // S1C33 hardware interprets SP-relative immediates in scaled units:
-  //   ld.w/st.w: imm6 is in word units (×4)
-  //   ld.h/st.h/ld.uh/st.h: imm6 is in halfword units (×2)
-  //   ld.b/st.b/ld.ub: imm6 is in byte units (×1)
-  //   add/sub %sp: imm10 is in word units (×4)
-  // gcc33 encodes "ld.w [%sp+0xd]" for byte offset 52 (13 words × 4).
-  // We must divide the byte offset by the access scale before encoding.
+  // S1C33 SP-relative class-2 instructions have two offset encodings:
+  //   • no EXT:  imm6 is scaled by access size (word ×4, halfword ×2, byte ×1)
+  //   • with EXT: ext+imm6 forms a byte displacement directly
+  // For example, byte offset 52 without EXT is encoded as ld.w [%sp+0xd], but
+  // byte offset 380 with EXT is encoded as ext 5 / ld.w [%sp+60].
   assert(Offset >= 0 && "Negative SP-relative frame offset");
 
   // Determine scale factor from instruction opcode.
@@ -283,25 +269,26 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   assert((Offset % Scale) == 0 &&
          "SP-relative offset not aligned to access size");
   int64_t ScaledOffset = Offset / Scale;
+  int64_t EncodedOffset = ScaledOffset;
 
-  // The 6-bit unsigned field gives range [0, 63] in scaled units.
-  // For word access: 0–252 bytes.  For halfword: 0–126.  For byte: 0–63.
-  // Values > 63 require an ext prefix to extend the field.
+  // Without EXT the 6-bit field is scaled. Once EXT is present, the combined
+  // displacement is a raw byte offset whose low 6 bits live in the instruction.
   if (!isUInt<6>(ScaledOffset)) {
-    // Insert EXT prefix(es) before MI to extend the 6-bit immediate.
-    if (isUInt<19>(ScaledOffset)) {
-      int64_t ext_imm13 = (ScaledOffset >> 6) & 0x1FFF;
+    EncodedOffset = Offset;
+    if (isUInt<19>(EncodedOffset)) {
+      int64_t ext_imm13 = (EncodedOffset >> 6) & 0x1FFF;
       BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext_imm13);
     } else {
-      int64_t ext2_imm13 = (ScaledOffset >> 6)  & 0x1FFF;
-      int64_t ext1_imm13 = (ScaledOffset >> 19) & 0x1FFF;
+      int64_t ext2_imm13 = (EncodedOffset >> 6)  & 0x1FFF;
+      int64_t ext1_imm13 = (EncodedOffset >> 19) & 0x1FFF;
       BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext1_imm13);
       BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext2_imm13);
     }
   }
 
-  // Replace the FrameIndex operand with the scaled SP-relative offset.
-  MI.getOperand(FIOperandNum).ChangeToImmediate(ScaledOffset);
+  // Use scaled units for plain imm6, but raw byte displacement once EXT is
+  // present. The low 6 bits must satisfy the access-size alignment.
+  MI.getOperand(FIOperandNum).ChangeToImmediate(EncodedOffset & 0x3F);
   return false;
 }
 

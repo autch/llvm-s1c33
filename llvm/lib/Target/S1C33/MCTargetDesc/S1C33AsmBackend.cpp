@@ -38,6 +38,11 @@ public:
         //   Covers all 32 bits of the 4-byte ext+branch sequence.
         //   applyFixup patches ext imm13 (Data[0..1]) and branch sign8 (Data[2]).
         {"fixup_s1c33_pc_rel_21", 0, 32, 0},
+        // fixup_s1c33_pc_rel_h/m/l:
+        //   Split 32-bit PC-relative ext+ext+branch/call relocation pieces.
+        {"fixup_s1c33_pc_rel_h", 0, 13, 0},
+        {"fixup_s1c33_pc_rel_m", 0, 13, 0},
+        {"fixup_s1c33_pc_rel_l", 0, 8, 0},
         // fixup_s1c33_abs_h: bits[31:19] of absolute addr → ext_h imm13 field.
         {"fixup_s1c33_abs_h", 0, 13, 0},
         // fixup_s1c33_abs_m: bits[18:6] of absolute addr → ext_m imm13 field.
@@ -116,6 +121,27 @@ public:
       return;
     }
 
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_h) {
+      int64_t ByteOff = static_cast<int64_t>(Value) - 4;
+      uint32_t Imm13 = static_cast<uint32_t>((ByteOff >> 22) & 0x1FFF);
+      Data[0] = static_cast<uint8_t>(Imm13 & 0xFF);
+      Data[1] = static_cast<uint8_t>(0xC0 | ((Imm13 >> 8) & 0x1F));
+      return;
+    }
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_m) {
+      int64_t ByteOff = static_cast<int64_t>(Value) - 2;
+      uint32_t Imm13 = static_cast<uint32_t>((ByteOff >> 9) & 0x1FFF);
+      Data[0] = static_cast<uint8_t>(Imm13 & 0xFF);
+      Data[1] = static_cast<uint8_t>(0xC0 | ((Imm13 >> 8) & 0x1F));
+      return;
+    }
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_l) {
+      int64_t ByteOff = static_cast<int64_t>(Value);
+      assert((ByteOff & 1) == 0 && "PC-relative branch to misaligned target");
+      Data[0] = static_cast<uint8_t>((ByteOff >> 1) & 0xFF);
+      return;
+    }
+
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_h) {
       uint32_t Imm13 = ((uint32_t)Value >> 19) & 0x1FFF;
       Data[0] = static_cast<uint8_t>(Imm13 & 0xFF);
@@ -171,7 +197,11 @@ public:
     case S1C33::JP_i:     return S1C33::JP_EXT1;
     case S1C33::JP_D_i:   return S1C33::JP_D_EXT1;
     case S1C33::CALL_i:   return S1C33::CALL_EXT1;
+    case S1C33::CALL_D_i: return S1C33::CALL_D_EXT1;
+    case S1C33::CALL_EXT1:   return S1C33::CALL_EXT2;
+    case S1C33::CALL_D_EXT1: return S1C33::CALL_D_EXT2;
     case S1C33::CALL_sym:      return S1C33::CALL_EXT1;
+    case S1C33::CALL_D_sym:    return S1C33::CALL_D_EXT1;
     case S1C33::LDW_SYM_EXT0: return S1C33::LDW_SYM_EXT2; // direct: 2→6 bytes
     case S1C33::LDW_SYM_EXT1: return S1C33::LDW_SYM_EXT2;
     default:                   return Op;
@@ -192,6 +222,16 @@ public:
       if (!Resolved) return true;
       int64_t Sign8 = (int64_t)Value / 2;
       return Sign8 < -128 || Sign8 > 127;
+    }
+
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_21) {
+      if (F.getOpcode() != S1C33::CALL_EXT1 &&
+          F.getOpcode() != S1C33::CALL_D_EXT1)
+        return false;
+      if (!Resolved)
+        return true;
+      int64_t Offset = static_cast<int64_t>(Value) - 2;
+      return !isInt<21>(Offset / 2);
     }
 
     // abs_l controls EXT0 → EXT2 relaxation (direct, skipping EXT1).

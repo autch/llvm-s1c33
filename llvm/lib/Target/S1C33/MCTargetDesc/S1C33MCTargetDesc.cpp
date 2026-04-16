@@ -89,6 +89,11 @@ public:
   bool isCall(const MCInst &Inst) const override {
     switch (Inst.getOpcode()) {
     case S1C33::CALL_i:
+    case S1C33::CALL_D_i:
+    case S1C33::CALL_EXT1:
+    case S1C33::CALL_D_EXT1:
+    case S1C33::CALL_EXT2:
+    case S1C33::CALL_D_EXT2:
     case S1C33::CALL_r:
     case S1C33::CALL_r_D:
       return true;

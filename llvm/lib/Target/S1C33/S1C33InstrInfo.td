@@ -377,6 +377,16 @@ def CALL_i : S1C33InstC0Rel<0b1110, 0,
   let Uses           = [SP];
 }
 
+// call.d sign8 — Delayed PC-relative subroutine call  (op1=1110, d=1).
+def CALL_D_i : S1C33InstC0Rel<0b1110, 1,
+    (outs), (ins simm8:$imm8), "call.d\t$imm8", []> {
+  let isCall         = 1;
+  let hasDelaySlot   = 1;
+  let hasSideEffects = 1;
+  let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
+  let Uses           = [SP];
+}
+
 // CALL_sym — direct call to a named symbol.
 // Shares the call encoding (op1=1110); the imm8 field holds a symbol reference
 // rendered by the AsmPrinter and resolved as a PC-relative fixup.
@@ -389,6 +399,17 @@ def CALL_sym : S1C33InstC0Rel<0b1110, 0,
   // Clobbers: PSR flags, caller-saved R4–R7 and return-value regs R10/R11.
   let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
+}
+
+// Delayed direct call to a named symbol.
+def CALL_D_sym : S1C33InstC0Rel<0b1110, 1,
+    (outs), (ins i32imm:$imm8), "call.d\t$imm8", []> {
+  let isCall         = 1;
+  let hasDelaySlot   = 1;
+  let isCodeGenOnly  = 1;
+  let hasSideEffects = 1;
+  let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
+  let Uses           = [SP];
 }
 
 // Patterns: S1C33Call → CALL_sym (direct) or CALL_r (indirect).
@@ -479,6 +500,23 @@ def JP_D_EXT1 : S1C33PseudoExt1<(outs), (ins simm8:$imm8), "jp.d\t$imm8", []> {
 }
 def CALL_EXT1 : S1C33PseudoExt1<(outs), (ins i32imm:$imm8), "call\t$imm8", []> {
   let isCall = 1;
+  let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
+  let Uses = [SP];
+}
+def CALL_D_EXT1 : S1C33PseudoExt1<(outs), (ins i32imm:$imm8), "call.d\t$imm8", []> {
+  let isCall = 1;
+  let hasDelaySlot = 1;
+  let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
+  let Uses = [SP];
+}
+def CALL_EXT2 : S1C33PseudoAddrN<6, (outs), (ins i32imm:$imm8), "call\t$imm8", []> {
+  let isCall = 1;
+  let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
+  let Uses = [SP];
+}
+def CALL_D_EXT2 : S1C33PseudoAddrN<6, (outs), (ins i32imm:$imm8), "call.d\t$imm8", []> {
+  let isCall = 1;
+  let hasDelaySlot = 1;
   let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
 }

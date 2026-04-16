@@ -201,6 +201,7 @@ static bool isPCRelBranch(unsigned Opcode) {
   case S1C33::JP_i:
   case S1C33::JP_D_i:
   case S1C33::CALL_i:
+  case S1C33::CALL_D_i:
   case S1C33::JRGT:   case S1C33::JRGE:   case S1C33::JRLT:   case S1C33::JRLE:
   case S1C33::JRUGT:  case S1C33::JRUGE:  case S1C33::JRULT:  case S1C33::JRULE:
   case S1C33::JREQ:   case S1C33::JRNE:

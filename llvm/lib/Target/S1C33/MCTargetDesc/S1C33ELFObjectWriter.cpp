@@ -58,6 +58,12 @@ public:
       return R_S1C33_REL8;
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_21)
       return R_S1C33_REL21;
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_h)
+      return R_S1C33_REL_H;
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_m)
+      return R_S1C33_REL_M;
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_l)
+      return R_S1C33_REL_L;
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_h)
       return R_S1C33_ABS_H;
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_m)

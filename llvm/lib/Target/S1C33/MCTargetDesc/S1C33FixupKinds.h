@@ -31,6 +31,16 @@ enum Fixups {
   //   sign8_raw = extended_imm & 0xFF           → branch word bits[7:0]
   fixup_s1c33_pc_rel_21,
 
+  // Split 32-bit PC-relative fixups for ext+ext+branch/call.
+  // The three relocations are all PC-relative to the instruction they patch:
+  //   fixup_s1c33_pc_rel_h: ext_h at P_H, encodes bits[31:22] of target-call
+  //   fixup_s1c33_pc_rel_m: ext_m at P_M=P_H+2, encodes bits[21:9]
+  //   fixup_s1c33_pc_rel_l: call/jp at P_L=P_H+4, encodes bits[8:1]
+  // where call_addr = P_H + 4.
+  fixup_s1c33_pc_rel_h,
+  fixup_s1c33_pc_rel_m,
+  fixup_s1c33_pc_rel_l,
+
   // Absolute address fixups for the 3-level LDW_SYM_EXT0/EXT1/EXT2 sequence.
   // Each targets the corresponding ext or ld.w instruction word.
   fixup_s1c33_abs_h, // bits[31:19] of absolute addr → ext_h imm13 field

@@ -76,7 +76,18 @@ static uint16_t getExt1BranchWord(unsigned Opcode) {
   case S1C33::JP_EXT1:    return 0x1E00;
   case S1C33::JP_D_EXT1:  return 0x1F00;
   case S1C33::CALL_EXT1:  return 0x1C00;
+  case S1C33::CALL_D_EXT1:return 0x1D00;
   default:                return 0;
+  }
+}
+
+// Return the base 16-bit instruction word (with sign8=0) for an EXT2 pseudo,
+// or 0 if Opcode is not an EXT2 pseudo.
+static uint16_t getExt2BranchWord(unsigned Opcode) {
+  switch (Opcode) {
+  case S1C33::CALL_EXT2:   return 0x1C00;
+  case S1C33::CALL_D_EXT2: return 0x1D00;
+  default:                 return 0;
   }
 }
 
@@ -133,6 +144,22 @@ void S1C33MCCodeEmitter::encodeInstruction(const MCInst &Inst,
     Fixups.push_back(MCFixup::create(
         0, Expr, (MCFixupKind)S1C33::fixup_s1c33_pc_rel_21,
         /*PCRel=*/true));
+    return;
+  }
+
+  // 6-byte relaxed forms: ext_h + ext_m + branch/call word with split
+  // PC-relative fixups (REL_H/M/L).
+  if (uint16_t BranchWord = getExt2BranchWord(Inst.getOpcode())) {
+    support::endian::write<uint16_t>(CB, 0xC000, llvm::endianness::little);
+    support::endian::write<uint16_t>(CB, 0xC000, llvm::endianness::little);
+    support::endian::write<uint16_t>(CB, BranchWord, llvm::endianness::little);
+    const MCExpr *Expr = Inst.getOperand(0).getExpr();
+    Fixups.push_back(MCFixup::create(
+        0, Expr, (MCFixupKind)S1C33::fixup_s1c33_pc_rel_h, /*PCRel=*/true));
+    Fixups.push_back(MCFixup::create(
+        2, Expr, (MCFixupKind)S1C33::fixup_s1c33_pc_rel_m, /*PCRel=*/true));
+    Fixups.push_back(MCFixup::create(
+        4, Expr, (MCFixupKind)S1C33::fixup_s1c33_pc_rel_l, /*PCRel=*/true));
     return;
   }
 

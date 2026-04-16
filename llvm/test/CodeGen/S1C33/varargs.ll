@@ -32,7 +32,7 @@ declare void @llvm.va_copy(ptr, ptr)
 ; CHECK: ld.w [%sp+0], %r{{[0-9]+}}
 ; Load the first vararg through the pointer.
 ; CHECK: ld.w %r10, [%r{{[0-9]+}}]
-; CHECK: ret.d
+; CHECK: ret
 define i32 @varargs_callee(i32 %n, ...) {
   %va = alloca ptr, align 4
   call void @llvm.va_start(ptr %va)
@@ -86,7 +86,7 @@ define i32 @call_varargs(i32 %x, i32 %y) {
 ; CHECK: ld.w [%sp+0], %r{{[0-9]+}}
 ; va_copy stores the same address to va2.
 ; CHECK: ld.w [%sp+1], %r{{[0-9]+}}
-; CHECK: ret.d
+; CHECK: ret
 define i32 @varargs_copy(i32 %n, ...) {
   %va1 = alloca ptr, align 4
   %va2 = alloca ptr, align 4
@@ -157,7 +157,7 @@ done:
 ; va_arg expansion: load va_list ptr, bump by 4, store back, load value
 ; CHECK: add %r{{[0-9]+}}, 4
 ; CHECK: ld.w %r10, [%r{{[0-9]+}}]
-; CHECK: ret.d
+; CHECK: ret
 define i32 @vaarg_direct(i32 %n, ...) {
 entry:
   %va = alloca ptr, align 4

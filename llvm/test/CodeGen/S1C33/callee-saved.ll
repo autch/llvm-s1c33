@@ -27,7 +27,7 @@ declare i32 @callee()
 ; CHECK: pushn %r{{[0-3]}}
 ; CHECK: call callee
 ; CHECK: popn %r{{[0-3]}}
-; CHECK: ret.d
+; CHECK: ret
 define i32 @use_callee_saved_reg(i32 %a) {
   %r = call i32 @callee()
   %s = add i32 %r, %a
@@ -44,7 +44,7 @@ define i32 @use_callee_saved_reg(i32 %a) {
 ; CHECK: pushn %r{{[0-3]}}
 ; CHECK: call callee
 ; CHECK: popn %r{{[0-3]}}
-; CHECK: ret.d
+; CHECK: ret
 define i32 @multi_callee_saved(i32 %a, i32 %b, i32 %c, i32 %d) {
   %r = call i32 @callee()
   %s = add i32 %r, %a

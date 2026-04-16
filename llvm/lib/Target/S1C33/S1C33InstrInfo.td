@@ -250,27 +250,34 @@ def BRK : S1C33InstC0<0b0010, 0, 0b00, (outs), (ins), "brk", []> {
 // retd — Return from debug  (op1=0010, d=0, op2=01) → 0x0440
 def RETD : S1C33InstC0<0b0010, 0, 0b01, (outs), (ins), "retd", []> {
   let hasSideEffects = 1;
+  let mayLoad      = 1;
   let isReturn     = 1;
   let isTerminator = 1;
   let isBarrier    = 1;
+  let Defs         = [SP];
+  let Uses         = [SP];
 }
 
 // reti — Return from trap handler  (op1=0010, d=0, op2=11) → 0x04C0
 def RETI : S1C33InstC0<0b0010, 0, 0b11, (outs), (ins), "reti",
     [(S1C33Reti)]> {
   let hasSideEffects = 1;
+  let mayLoad      = 1;
   let isReturn     = 1;
   let isTerminator = 1;
   let isBarrier    = 1;
+  let Defs         = [SP, PSR];
   let Uses         = [SP];
 }
 
 // ret — Return from subroutine  (op1=0011, d=0, op2=01) → 0x0640
 def RET : S1C33InstC0<0b0011, 0, 0b01, (outs), (ins), "ret",
     [(S1C33Ret)]> {
+  let mayLoad      = 1;
   let isReturn     = 1;
   let isTerminator = 1;
   let isBarrier    = 1;
+  let Defs         = [SP];
   let Uses         = [SP];
 }
 
@@ -278,10 +285,12 @@ def RET : S1C33InstC0<0b0011, 0, 0b01, (outs), (ins), "ret",
 // Delay slot: the instruction following ret.d executes before the return.
 // Emitted by S1C33DelaySlotFiller in place of RET when a slot can be filled.
 def RET_D : S1C33InstC0<0b0011, 1, 0b01, (outs), (ins), "ret.d", []> {
+  let mayLoad       = 1;
   let isReturn      = 1;
   let isTerminator  = 1;
   let isBarrier     = 1;
   let hasDelaySlot  = 1;
+  let Defs          = [SP];
   let Uses          = [SP];
 }
 
@@ -290,10 +299,11 @@ def RET_D : S1C33InstC0<0b0011, 1, 0b01, (outs), (ins), "ret.d", []> {
 // NOTE: jp.d %rb is FORBIDDEN (hardware DMA bug). call.d %rb is safe.
 def CALL_r_D : S1C33InstC0Reg<0b0011, 1, 0b00,
     (outs), (ins GR32:$rb), "call.d\t$rb", []> {
-  let isCall       = 1;
-  let hasDelaySlot = 1;
-  let Defs         = [SP, PSR, R4, R5, R6, R7, R10, R11];
-  let Uses         = [SP];
+  let isCall         = 1;
+  let hasDelaySlot   = 1;
+  let hasSideEffects = 1;
+  let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
+  let Uses           = [SP];
 }
 
 //===----------------------------------------------------------------------===//
@@ -306,28 +316,29 @@ def CALL_r_D : S1C33InstC0Reg<0b0011, 1, 0b00,
 // pushn %rb — Push R0–Rb  (op1=0001, d=0, op2=00) → 0x0200|rb
 def PUSHN : S1C33InstC0Reg<0b0001, 0, 0b00,
     (outs), (ins GR32:$rb), "pushn\t$rb", []> {
-  let hasSideEffects = 0;
-  let mayStore = 1;
-  let Defs = [SP];
-  let Uses = [SP];
+  let hasSideEffects = 1;
+  let mayStore       = 1;
+  let Defs           = [SP];
+  let Uses           = [SP];
 }
 
 // popn %rb — Pop Rb–R0  (op1=0001, d=0, op2=01) → 0x0240|rb
 def POPN : S1C33InstC0Reg<0b0001, 0, 0b01,
     (outs GR32:$rb), (ins), "popn\t$rb", []> {
-  let hasSideEffects = 0;
-  let mayLoad = 1;
-  let Defs = [SP];
-  let Uses = [SP];
+  let hasSideEffects = 1;
+  let mayLoad        = 1;
+  let Defs           = [SP];
+  let Uses           = [SP];
 }
 
 // call %rb — Subroutine call via register  (op1=0011, d=0, op2=00) → 0x0600|rb
 // Callee may clobber PSR (N/Z/V/C flags) and caller-saved registers.
 def CALL_r : S1C33InstC0Reg<0b0011, 0, 0b00,
     (outs), (ins GR32:$rb), "call\t$rb", []> {
-  let isCall = 1;
-  let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
-  let Uses = [SP];
+  let isCall         = 1;
+  let hasSideEffects = 1;
+  let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
+  let Uses           = [SP];
 }
 
 // jp %rb — Unconditional jump via register  (op1=0011, d=0, op2=10) → 0x0680|rb
@@ -360,9 +371,10 @@ def JP_i : S1C33InstC0Rel<0b1111, 0,
 // call sign8 — PC-relative subroutine call  (op1=1110, d=0) → 0x1C00|sign8
 def CALL_i : S1C33InstC0Rel<0b1110, 0,
     (outs), (ins simm8:$imm8), "call\t$imm8", []> {
-  let isCall = 1;
-  let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
-  let Uses = [SP];
+  let isCall         = 1;
+  let hasSideEffects = 1;
+  let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
+  let Uses           = [SP];
 }
 
 // CALL_sym — direct call to a named symbol.
@@ -373,6 +385,7 @@ def CALL_sym : S1C33InstC0Rel<0b1110, 0,
     (outs), (ins i32imm:$imm8), "call\t$imm8", []> {
   let isCall = 1;
   let isCodeGenOnly = 1;
+  let hasSideEffects = 1;
   // Clobbers: PSR flags, caller-saved R4–R7 and return-value regs R10/R11.
   let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
@@ -495,6 +508,11 @@ def LDW_SYM_EXT2 : S1C33PseudoAddrN<6, (outs GR32:$rd), (ins i32imm:$sym),
 def INT : S1C33InstC0Imm2<0b0010, 0, 0b10,
     (outs), (ins i32imm:$imm2), "int\t$imm2", []> {
   let hasSideEffects = 1;
+  let mayStore      = 1;
+  let isTerminator  = 1;
+  let isBarrier     = 1;
+  let Defs          = [SP];
+  let Uses          = [SP, PSR];
 }
 
 //===----------------------------------------------------------------------===//
@@ -1093,7 +1111,7 @@ let hasSideEffects = 0, SchedRW = [WriteALU] in {
 // op1 values confirmed by user 2026-03-24.
 //===----------------------------------------------------------------------===//
 
-let hasSideEffects = 1, Defs = [PSR] in {
+let hasSideEffects = 1, Defs = [PSR, ALR, AHR], Uses = [ALR, AHR] in {
   // div0s %rs  setup signed divide (op1=010, op2=11); reads ALR (dividend)
   def DIV0S : S1C33InstC4Reg2<0b010, 0b11,
       (outs), (ins GR32:$rs),
@@ -1522,16 +1540,18 @@ def BNOT : S1C33InstC5BitOp<0b101,
 
 let Predicates = [HasHWMul] in {
 
-// mlt.h %rd, %rs — 16×16→32-bit signed multiply (ALR = (s16)rd × (s16)rs)
+// mlt.h %rd, %rs — 16×16→32-bit signed multiply.
+// Hardware writes the arithmetic result registers as a unit; model both ALR/AHR.
 // Class 5: op1=000, op2=10 → 0xA800|(rs<<4)|rd
-let Defs = [ALR], hasSideEffects = 0, SchedRW = [WriteMltH] in
+let Defs = [ALR, AHR], hasSideEffects = 0, SchedRW = [WriteMltH] in
 def MLT_H : S1C33InstC5Reg2<0b000, 0b10,
     (outs), (ins GR32:$rs, GR32:$rd),
     "mlt.h\t$rd, $rs", []>;
 
-// mltu.h %rd, %rs — 16×16→32-bit unsigned multiply (ALR = (u16)rd × (u16)rs)
+// mltu.h %rd, %rs — 16×16→32-bit unsigned multiply.
+// Hardware writes the arithmetic result registers as a unit; model both ALR/AHR.
 // Class 5: op1=001, op2=10 → 0xA900|(rs<<4)|rd
-let Defs = [ALR], hasSideEffects = 0, SchedRW = [WriteMltH] in
+let Defs = [ALR, AHR], hasSideEffects = 0, SchedRW = [WriteMltH] in
 def MLTU_H : S1C33InstC5Reg2<0b001, 0b10,
     (outs), (ins GR32:$rs, GR32:$rd),
     "mltu.h\t$rd, $rs", []>;
@@ -1550,11 +1570,13 @@ def MLTU_W : S1C33InstC5Reg2<0b011, 0b10,
     (outs), (ins GR32:$rs, GR32:$rd),
     "mltu.w\t$rd, $rs", []>;
 
-// mac %rs — multiply-accumulate: AHR:ALR += rd × rs  (op1=100, op2=10, rd=0000)
-// Class 5: op1=100, op2=10, rs in bits[7:4], rd=0000 (fixed)
-// AHR:ALR += (signed 32-bit %rs) × (value in ALR used as multiplier src)
-// CPU Manual §2.5.7: accumulates into AHR:ALR.
-let Defs = [ALR, AHR], Uses = [ALR, AHR], hasSideEffects = 0 in
+// mac %rs — multiply-accumulate with implicit register window and memory access.
+// Class 5: op1=100, op2=10, rs in bits[7:4], rd=0000 (fixed).
+// CPU Manual §2.5.7: updates AHR:ALR, reads memory through the implicit
+// register window rooted at %rs, and post-updates that window (%rs..%rs+2).
+// The register window cannot be modeled statically in TableGen, so keep the
+// instruction conservatively side-effecting and memory-reading.
+let Defs = [ALR, AHR], Uses = [ALR, AHR], mayLoad = 1, hasSideEffects = 1 in
 def MAC : S1C33InstC5Reg2<0b100, 0b10,
     (outs), (ins GR32:$rs),
     "mac\t$rs", []> {
@@ -1592,4 +1614,3 @@ def MULHU_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
     [(set GR32:$rd, (mulhu GR32:$rs1, GR32:$rs2))]>;
 
 } // let Predicates = [HasHWMul]
-

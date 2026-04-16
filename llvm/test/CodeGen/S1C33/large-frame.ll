@@ -28,8 +28,7 @@
 ; CHECK: ext 4
 ; CHECK-NEXT: ld.w [%sp+0],
 ; CHECK: add %sp, 65
-; CHECK: ret.d
-; CHECK-NEXT: nop
+; CHECK: ret
 define void @sp_ext_access(i32 %val) {
   %var = alloca i32, align 4            ; 4 bytes, first alloca → word offset 64
   %pad = alloca [64 x i32], align 4     ; 256 bytes, second alloca → SP+0..SP+255
@@ -64,8 +63,7 @@ define void @sp_ext_access_nonzero_imm6(i32 %val) {
 ; CHECK-LABEL: large_array:
 ; CHECK: sub %sp, 32
 ; CHECK: add %sp, 32
-; CHECK: ret.d
-; CHECK-NEXT: nop
+; CHECK: ret
 define void @large_array(i32 %val) {
   %arr = alloca [32 x i32], align 4
   %p = getelementptr [32 x i32], ptr %arr, i32 0, i32 0

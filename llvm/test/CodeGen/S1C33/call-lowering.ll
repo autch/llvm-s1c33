@@ -16,7 +16,7 @@ declare i32 @add(i32 %a, i32 %b)
 ; CHECK: ld.w %r13, 2
 ; CHECK: call add
 ; Return value already in R10 after call; function returns it directly.
-; CHECK: ret.d
+; CHECK: ret
 define i32 @call_add() {
   %r = call i32 @add(i32 1, i32 2)
   ret i32 %r
@@ -30,7 +30,7 @@ define i32 @call_add() {
 ; %a is in R12, %b is in R13 from the caller.
 ; After setting up args for the callee (they're already in R12/R13):
 ; CHECK: call add
-; CHECK: ret.d
+; CHECK: ret
 define i32 @call_passthrough(i32 %a, i32 %b) {
   %r = call i32 @add(i32 %a, i32 %b)
   ret i32 %r

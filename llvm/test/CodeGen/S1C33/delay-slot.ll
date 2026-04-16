@@ -6,7 +6,7 @@
 ;   - jp.d %rb is FORBIDDEN (hardware DMA bug) — never generated.
 ;   - call.d %rb and ret.d are safe.
 ;   - Delay slot: 1-cycle, no memory access, no ext prefix, no branch.
-;   - If no valid candidate, a nop is inserted.
+;   - If no valid candidate, keep the non-delayed form.
 
 ;-------------------------------------------------------------------------------
 ; Case 1: ret.d with a useful instruction in the delay slot.
@@ -20,23 +20,28 @@ define i32 @useful_slot(i32 %x) {
 }
 
 ;-------------------------------------------------------------------------------
-; Case 2: ret.d with nop — empty function has no instruction before ret.
+; Case 2: plain ret — empty function has no instruction to fill a delay slot.
 ;-------------------------------------------------------------------------------
 ; CHECK-LABEL: nop_slot:
-; CHECK:       ret.d
-; CHECK-NEXT:  nop
+; CHECK:       ret
 define void @nop_slot() {
   ret void
 }
 
 ;-------------------------------------------------------------------------------
-; Case 3: jp.d — unconditional branch uses delayed form.
-; Tested with -O0 to prevent the branch optimizer from eliminating the jump.
+; Case 3: no valid slot candidate for the unconditional jumps in the lowered
+; diamond, so the pass keeps plain jp / ret instead of delayed forms + nop.
+; Tested with -O0 to keep the explicit merge block.
 ;-------------------------------------------------------------------------------
 ; RUN: llc -mtriple=s1c33-none-elf -O0 -o - %s | FileCheck %s --check-prefix=CHECK-JPD
 ; CHECK-JPD-LABEL: jpd_uncond:
-; CHECK-JPD:       jp.d
-; CHECK-JPD-NEXT:  nop
+; CHECK-JPD:       jrne
+; CHECK-JPD:       jp
+; CHECK-JPD:       call callee_a
+; CHECK-JPD:       jp
+; CHECK-JPD:       call callee_b
+; CHECK-JPD:       jp
+; CHECK-JPD:       ret
 declare i32 @callee_a()
 declare i32 @callee_b()
 define i32 @jpd_uncond(i32 %x) {

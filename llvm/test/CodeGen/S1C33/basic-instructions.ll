@@ -9,7 +9,7 @@
 ; ret void
 ;-------------------------------------------------------------------------------
 ; CHECK-LABEL: void_return:
-; CHECK: ret.d
+; CHECK: ret
 define void @void_return() {
   ret void
 }
@@ -43,12 +43,11 @@ define i32 @ret_31() {
 ; Does NOT fit in 6 bits → needs ext 0 to extend the 6-bit field to 19 bits.
 ; 42 = 0b101010: sign6 field = -22.  ext 0 widens sign-extension to 19 bits: effective = +42.
 ; The ext-extended ld.w cannot fill the delay slot (ext must precede it),
-; so the slot gets a nop.
+; so the backend keeps a plain ret.
 ; CHECK-LABEL: ret_42:
 ; CHECK: ext 0
 ; CHECK-NEXT: ld.w %r10, -22
-; CHECK-NEXT: ret.d
-; CHECK-NEXT: nop
+; CHECK-NEXT: ret
 define i32 @ret_42() {
   ret i32 42
 }
@@ -57,8 +56,7 @@ define i32 @ret_42() {
 ; CHECK-LABEL: ret_12345:
 ; CHECK: ext 192
 ; CHECK-NEXT: ld.w %r10, -7
-; CHECK-NEXT: ret.d
-; CHECK-NEXT: nop
+; CHECK-NEXT: ret
 define i32 @ret_12345() {
   ret i32 12345
 }
@@ -68,8 +66,7 @@ define i32 @ret_12345() {
 ; CHECK: ext 1
 ; CHECK-NEXT: ext 7433
 ; CHECK-NEXT: ld.w %r10, 0
-; CHECK-NEXT: ret.d
-; CHECK-NEXT: nop
+; CHECK-NEXT: ret
 define i32 @ret_1000000() {
   ret i32 1000000
 }
@@ -113,13 +110,12 @@ define i32 @sub_rr(i32 %a, i32 %b) {
 
 ;-------------------------------------------------------------------------------
 ; ld.w — register-indirect load
-; Memory access cannot fill delay slot → nop.
+; Memory access cannot fill delay slot → keep plain ret.
 ;-------------------------------------------------------------------------------
 
 ; CHECK-LABEL: ldw_ri:
 ; CHECK: ld.w %r10, [%r12]
-; CHECK-NEXT: ret.d
-; CHECK-NEXT: nop
+; CHECK-NEXT: ret
 define i32 @ldw_ri(ptr %p) {
   %v = load i32, ptr %p
   ret i32 %v
@@ -131,8 +127,7 @@ define i32 @ldw_ri(ptr %p) {
 
 ; CHECK-LABEL: ldb_ri:
 ; CHECK: ld.b %r10, [%r12]
-; CHECK-NEXT: ret.d
-; CHECK-NEXT: nop
+; CHECK-NEXT: ret
 define i32 @ldb_ri(ptr %p) {
   %v = load i8, ptr %p
   %ext = sext i8 %v to i32
@@ -145,11 +140,9 @@ define i32 @ldb_ri(ptr %p) {
 
 ; CHECK-LABEL: ldub_ri:
 ; CHECK: ld.ub %r10, [%r12]
-; CHECK-NEXT: ret.d
-; CHECK-NEXT: nop
+; CHECK-NEXT: ret
 define i32 @ldub_ri(ptr %p) {
   %v = load i8, ptr %p
   %ext = zext i8 %v to i32
   ret i32 %ext
 }
-

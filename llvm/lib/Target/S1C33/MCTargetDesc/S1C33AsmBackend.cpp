@@ -176,12 +176,25 @@ public:
   // Return the relaxed opcode for a branch/call opcode, or the same
   // opcode if not relaxable.
   //
-  // LDW_SYM_EXT0 relaxes directly to LDW_SYM_EXT2 (skipping EXT1) to avoid
-  // a two-step relaxation chain that breaks the MCAssembler's relaxOnce loop
-  // when the section has few fragments (e.g. with -ffunction-sections or LTO).
-  // The inner loop's MaxIter budget is based on fragment count; a two-step
-  // chain can exhaust it before the final layoutSection call, leaving stale
-  // fragment offsets and causing the writeSectionData size assertion to fail.
+  // Single-step relaxation rule: any 2-byte form that can *only* reach its
+  // target via an EXT2 sequence must relax directly to EXT2 (skipping EXT1).
+  //
+  // Background: the MCAssembler's relaxOnce inner loop has a MaxIter budget
+  // equal to `Tail->getLayoutOrder() + 1`.  For a section with few fragments
+  // (produced by -ffunction-sections or LTO's per-function .text.<name>
+  // sections), MaxIter can be as low as 2.  A two-step chain
+  // (e.g. CALL_i → CALL_EXT1 → CALL_EXT2) uses both iterations for relaxation
+  // and leaves the final layoutSection call un-executed, so fragment offsets
+  // within the section stay stale and the writeSectionData size assertion
+  // fires at ELF emission time.
+  //
+  // Therefore CALL_i / CALL_D_i / CALL_sym / CALL_D_sym / LDW_SYM_EXT0 all
+  // skip the EXT1 rung when relaxation is actually needed.  This costs 2
+  // bytes on calls whose target happens to fit in sign21 but not sign8 —
+  // acceptable compared to the alternative.
+  //
+  // CALL_EXT1 / LDW_SYM_EXT1 remain as single-step rungs for hand-written
+  // assembly that starts at the 4-byte form (`ext N; call ...`).
   static unsigned getRelaxedOpcode(unsigned Op) {
     switch (Op) {
     case S1C33::JRGT:     return S1C33::JRGT_EXT1;
@@ -196,15 +209,16 @@ public:
     case S1C33::JRNE:     return S1C33::JRNE_EXT1;
     case S1C33::JP_i:     return S1C33::JP_EXT1;
     case S1C33::JP_D_i:   return S1C33::JP_D_EXT1;
-    case S1C33::CALL_i:   return S1C33::CALL_EXT1;
-    case S1C33::CALL_D_i: return S1C33::CALL_D_EXT1;
-    case S1C33::CALL_EXT1:   return S1C33::CALL_EXT2;
-    case S1C33::CALL_D_EXT1: return S1C33::CALL_D_EXT2;
-    case S1C33::CALL_sym:      return S1C33::CALL_EXT1;
-    case S1C33::CALL_D_sym:    return S1C33::CALL_D_EXT1;
+    // CALL relaxation skips EXT1 (see comment above).
+    case S1C33::CALL_i:       return S1C33::CALL_EXT2;
+    case S1C33::CALL_D_i:     return S1C33::CALL_D_EXT2;
+    case S1C33::CALL_sym:     return S1C33::CALL_EXT2;
+    case S1C33::CALL_D_sym:   return S1C33::CALL_D_EXT2;
+    case S1C33::CALL_EXT1:    return S1C33::CALL_EXT2;
+    case S1C33::CALL_D_EXT1:  return S1C33::CALL_D_EXT2;
     case S1C33::LDW_SYM_EXT0: return S1C33::LDW_SYM_EXT2; // direct: 2→6 bytes
     case S1C33::LDW_SYM_EXT1: return S1C33::LDW_SYM_EXT2;
-    default:                   return Op;
+    default:                  return Op;
     }
   }
 

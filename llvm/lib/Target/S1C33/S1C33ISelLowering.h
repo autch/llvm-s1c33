@@ -111,6 +111,12 @@ public:
   std::pair<unsigned, const TargetRegisterClass *>
   getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
                                 StringRef Constraint, MVT VT) const override;
+
+  // Post-increment indexed addressing: fuse `(load ptr) + (add ptr, size)`
+  // into `ld.X %rd, [%rb]+` and the store-side equivalent.
+  bool getPostIndexedAddressParts(SDNode *N, SDNode *Op, SDValue &Base,
+                                   SDValue &Offset, ISD::MemIndexedMode &AM,
+                                   SelectionDAG &DAG) const override;
 };
 
 } // namespace llvm

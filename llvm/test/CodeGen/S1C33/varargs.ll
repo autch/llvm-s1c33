@@ -109,9 +109,9 @@ define i32 @varargs_copy(i32 %n, ...) {
 ; va_start sets va = SP+20 (12 bytes local + 4 retaddr + 4 for %n).
 ; CHECK: ld.w %r{{[0-9]+}}, %sp
 ; CHECK-NEXT: add %r{{[0-9]+}}, 20
-; In the loop body, the pointer is dereferenced and advanced by 4.
-; CHECK: ld.w %r{{[0-9]+}}, [%r{{[0-9]+}}]
-; CHECK: add %r{{[0-9]+}}, 4
+; In the loop body, the pointer is dereferenced and advanced by 4 via
+; post-increment load (load + GEP+4 are fused into ld.w [%rb]+).
+; CHECK: ld.w %r{{[0-9]+}}, [%r{{[0-9]+}}]+
 define i32 @sum(i32 %n, ...) {
 entry:
   %va = alloca ptr, align 4

@@ -231,6 +231,15 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   // - BR_CC, SETCC: sign-bit test optimization (sext_inreg+cmp → and+cmp)
   // - SRL: signed-division-by-power-of-2 bias (shift chain → select_cc)
   setTargetDAGCombine({ISD::BR_CC, ISD::SETCC, ISD::SRL, ISD::AND});
+
+  // Post-increment addressing: ld.X %rd, [%rb]+ and ld.X [%rb]+, %rs.
+  // S1C33 supports only POST_INC (no PRE_INC/POST_DEC) per CPU Manual §4.3.
+  // Enable for i8/i16/i32 — ISelDAGToDAG's tryIndexedLoad picks the exact
+  // opcode (LDB/LDUB/LDH/LDUH/LDW) based on the extension type.
+  for (MVT VT : {MVT::i8, MVT::i16, MVT::i32}) {
+    setIndexedLoadAction(ISD::POST_INC, VT, Legal);
+    setIndexedStoreAction(ISD::POST_INC, VT, Legal);
+  }
 }
 
 const char *S1C33TargetLowering::getTargetNodeName(unsigned Opcode) const {
@@ -1340,4 +1349,59 @@ SDValue S1C33TargetLowering::PerformDAGCombine(SDNode *N,
     return combineAndSraBias(N, DAG);
   default:          return SDValue();
   }
+}
+
+//===----------------------------------------------------------------------===//
+// Post-increment indexed addressing.
+//
+// Called by the DAG combiner when it sees (load/store ptr) + (add ptr, C).
+// Returns true to signal "yes, fuse these into a post-indexed op with base=ptr,
+// offset=C, AM=POST_INC".  The downstream instruction selector (manual for
+// loads in ISelDAGToDAG, TableGen Pat<> for stores) emits the real opcode.
+//
+// Pre-conditions enforced here:
+//   1. Op (the candidate bump) is an ADD with a constant RHS.
+//   2. The add-constant matches sizeof(MemVT): 1/2/4 for i8/i16/i32.
+//   3. The add's LHS is the same pointer the load/store uses as Base.
+// These match the CPU Manual §4.3 semantics: `[%rb]+` always bumps rb by the
+// transfer size.  Non-size increments can't be represented.
+//===----------------------------------------------------------------------===//
+bool S1C33TargetLowering::getPostIndexedAddressParts(
+    SDNode *N, SDNode *Op, SDValue &Base, SDValue &Offset,
+    ISD::MemIndexedMode &AM, SelectionDAG &DAG) const {
+  if (Op->getOpcode() != ISD::ADD)
+    return false;
+
+  EVT MemVT;
+  SDValue Ptr;
+  if (auto *LD = dyn_cast<LoadSDNode>(N)) {
+    MemVT = LD->getMemoryVT();
+    Ptr = LD->getBasePtr();
+  } else if (auto *ST = dyn_cast<StoreSDNode>(N)) {
+    MemVT = ST->getMemoryVT();
+    Ptr = ST->getBasePtr();
+  } else {
+    return false;
+  }
+
+  unsigned ExpectedInc;
+  switch (MemVT.getSimpleVT().SimpleTy) {
+  case MVT::i8:  ExpectedInc = 1; break;
+  case MVT::i16: ExpectedInc = 2; break;
+  case MVT::i32: ExpectedInc = 4; break;
+  default: return false;
+  }
+
+  auto *RHS = dyn_cast<ConstantSDNode>(Op->getOperand(1));
+  if (!RHS || RHS->getZExtValue() != ExpectedInc)
+    return false;
+
+  // The bump must apply to the same pointer used by the memory op.
+  if (Op->getOperand(0) != Ptr)
+    return false;
+
+  Base = Op->getOperand(0);
+  Offset = Op->getOperand(1);
+  AM = ISD::POST_INC;
+  return true;
 }

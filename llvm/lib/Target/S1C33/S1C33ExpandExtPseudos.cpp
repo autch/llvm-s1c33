@@ -142,6 +142,18 @@ bool S1C33ExpandExtPseudos::expandMI(MachineBasicBlock &MBB,
     return true;
   }
 
+  case S1C33::CMP_ri32: {
+    Register Rd = MI->getOperand(0).getReg();
+    int64_t V = MI->getOperand(1).getImm();
+    int64_t imm6 = emitExtForImm(MBB, MI, DL, TII, V, /*SignedImm6=*/true);
+    if (isInt<6>(V))
+      BuildMI(MBB, MI, DL, TII.get(S1C33::CMP_ri)).addReg(Rd).addImm(V);
+    else
+      BuildMI(MBB, MI, DL, TII.get(S1C33::CMP_ri)).addReg(Rd).addImm(imm6);
+    MI->eraseFromParent();
+    return true;
+  }
+
   // 3-operand ALU: ext imm / op %rd, %rs → rd = rs <op> zero_ext(imm)
   case S1C33::ADD_rri:
   case S1C33::SUB_rri:
@@ -211,6 +223,30 @@ bool S1C33ExpandExtPseudos::expandMI(MachineBasicBlock &MBB,
       BuildMI(MBB, MI, DL, TII.get(S1C33::EXT)).addImm(ext_imm13);
     }
     BuildMI(MBB, MI, DL, TII.get(RealOpc)).addReg(Rb).addReg(Rs);
+    MI->eraseFromParent();
+    return true;
+  }
+
+  case S1C33::BTST_ri_off:
+  case S1C33::BCLR_ri_off:
+  case S1C33::BSET_ri_off:
+  case S1C33::BNOT_ri_off: {
+    Register Rb = MI->getOperand(0).getReg();
+    int64_t Off = MI->getOperand(1).getImm();
+    int64_t Imm3 = MI->getOperand(2).getImm();
+
+    unsigned RealOpc;
+    switch (MI->getOpcode()) {
+    case S1C33::BTST_ri_off: RealOpc = S1C33::BTST; break;
+    case S1C33::BCLR_ri_off: RealOpc = S1C33::BCLR; break;
+    case S1C33::BSET_ri_off: RealOpc = S1C33::BSET; break;
+    default:                 RealOpc = S1C33::BNOT; break;
+    }
+    if (Off != 0) {
+      assert(isUInt<13>(Off) && "Bit-op ext displacement must fit in 13 bits");
+      BuildMI(MBB, MI, DL, TII.get(S1C33::EXT)).addImm(Off & 0x1FFF);
+    }
+    BuildMI(MBB, MI, DL, TII.get(RealOpc)).addReg(Rb).addImm(Imm3);
     MI->eraseFromParent();
     return true;
   }

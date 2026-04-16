@@ -88,3 +88,56 @@ entry:
   %r = add i32 %a, -100
   ret i32 %r
 }
+
+; cmp with 1000 on the BR_CC path — CMP_ri32 pseudo emits ext+cmp %rd,sign6
+; directly (2-op form), avoiding materialization into a scratch register.
+define void @test_cmp_1000_br(i32 %x, ptr %p) {
+; CHECK-LABEL: test_cmp_1000_br:
+; CHECK:      ext 15
+; CHECK-NEXT: cmp %r12, -24
+; CHECK-NOT:  ld.w %r{{[0-9]+}}, -24
+entry:
+  %c = icmp eq i32 %x, 1000
+  br i1 %c, label %a, label %b
+a:
+  store i32 11, ptr %p
+  ret void
+b:
+  store i32 22, ptr %p
+  ret void
+}
+
+; cmp with -100 via icmp eq — direct 2-op ext form.
+; -100 = 0x7FF9C in 19-bit two's complement: ext=8190, sign6=28.
+define void @test_cmp_neg100_br(i32 %x, ptr %p) {
+; CHECK-LABEL: test_cmp_neg100_br:
+; CHECK:      ext 8190
+; CHECK-NEXT: cmp %r12, 28
+; CHECK-NOT:  ld.w %r{{[0-9]+}}, 28
+entry:
+  %c = icmp eq i32 %x, -100
+  br i1 %c, label %a, label %b
+a:
+  store i32 11, ptr %p
+  ret void
+b:
+  store i32 22, ptr %p
+  ret void
+}
+
+; cmp with full 32-bit immediate requires 2 ext instructions
+define void @test_cmp_big_br(i32 %x, ptr %p) {
+; CHECK-LABEL: test_cmp_big_br:
+; CHECK:      ext {{[0-9]+}}
+; CHECK-NEXT: ext {{[0-9]+}}
+; CHECK-NEXT: cmp %r12, {{-?[0-9]+}}
+entry:
+  %c = icmp eq i32 %x, 123456789
+  br i1 %c, label %a, label %b
+a:
+  store i32 11, ptr %p
+  ret void
+b:
+  store i32 22, ptr %p
+  ret void
+}

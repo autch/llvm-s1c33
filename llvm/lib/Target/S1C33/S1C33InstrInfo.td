@@ -1256,6 +1256,15 @@ let Defs = [PSR], Constraints = "$rd = $rs" in {
       [(set GR32:$rd, (sub GR32:$rs, imm:$imm32))]>;
 }
 
+// CMP_ri32 — compare with arbitrary 32-bit immediate (flags only).
+// Expanded by ExpandExtPseudos to ext(s) + cmp %rd, sign6.
+// TableGen prefers the more-specific CMP_ri (immSExt6) when the immediate
+// fits in 6 bits; this pseudo catches the rest.
+let Defs = [PSR] in
+def CMP_ri32 : S1C33Pseudo<(outs), (ins GR32:$rd, i32imm:$imm32),
+    "# CMP_ri32 $rd, $imm32",
+    [(S1C33CmpCC GR32:$rd, imm:$imm32)]>;
+
 // Decrement idiom: (add %rs, -N) where 1 ≤ N ≤ 63 → sub %rd, N
 // Handles the common case where the DAGCombiner leaves (add x, -1) instead of (sub x, 1).
 def : Pat<(add GR32:$rs, negImmToUImm6:$imm),
@@ -1560,6 +1569,39 @@ let mayLoad = 1, mayStore = 1, hasSideEffects = 0, SchedRW = [WriteBitOp] in
 def BNOT : S1C33InstC5BitOp<0b101,
     (outs), (ins GR32:$rb, uimm3:$imm3),
     "bnot\t[$rb], $imm3", []>;
+
+//===----------------------------------------------------------------------===//
+// Bit operation with ext-extended displacement (Class 5 + ext form).
+//
+// CPU Manual §2.5.5 / quick reference 即値拡張(1): each bit operation accepts
+// one or two preceding ext prefixes, yielding `[%rb+imm13]` (or `imm26`) as the
+// effective memory byte.  The displacement is UNSIGNED (zero-extended by ext)
+// — same rule as Class 1 memory instructions.
+//
+// These pseudos let codegen (and asm aliases) express the single-line
+// `btst/bclr/bset/bnot [%rb+off], imm3` form.  ExpandExtPseudos emits:
+//   off == 0:   <opcode> [%rb], imm3
+//   0 < off ≤ 8191: ext off / <opcode> [%rb], imm3
+// Larger offsets are not representable in a single ext13 — the user must
+// recompute the base address separately.
+//===----------------------------------------------------------------------===//
+
+let Defs = [PSR], mayLoad = 1, hasSideEffects = 0, SchedRW = [WriteBitOp] in
+def BTST_ri_off : S1C33Pseudo<(outs),
+    (ins GR32:$rb, uimm13:$off, uimm3:$imm3),
+    "# btst\t[$rb+$off], $imm3", []>;
+
+let mayLoad = 1, mayStore = 1, hasSideEffects = 0, SchedRW = [WriteBitOp] in {
+  def BCLR_ri_off : S1C33Pseudo<(outs),
+      (ins GR32:$rb, uimm13:$off, uimm3:$imm3),
+      "# bclr\t[$rb+$off], $imm3", []>;
+  def BSET_ri_off : S1C33Pseudo<(outs),
+      (ins GR32:$rb, uimm13:$off, uimm3:$imm3),
+      "# bset\t[$rb+$off], $imm3", []>;
+  def BNOT_ri_off : S1C33Pseudo<(outs),
+      (ins GR32:$rb, uimm13:$off, uimm3:$imm3),
+      "# bnot\t[$rb+$off], $imm3", []>;
+}
 
 //===----------------------------------------------------------------------===//
 // CLASS 5 — Multiply instructions (S1C33209 optional hardware multiplier)

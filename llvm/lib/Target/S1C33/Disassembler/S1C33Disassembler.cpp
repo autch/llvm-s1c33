@@ -14,12 +14,22 @@
 //   instruction (up to 2 ext prefixes).  This disassembler tracks pending
 //   ext values and applies them post-decode to produce correct immediates.
 //
-//   Single ext (ext N):
-//     extended = sign_extend_19((N << width) | raw_field)
-//   Double ext (ext N1 then ext N2, then instruction):
-//     extended = sign_extend_32((N1 << (13+width)) | (N2 << width) | raw_field)
+//   The signedness of the extended value follows the TARGET instruction:
+//   instructions with a signed immediate (cmp/and/or/xor/not/ld.w sign6,
+//   branches) get sign-extended; instructions with an unsigned immediate
+//   (add/sub imm6, sp-relative memory, add/sub %sp imm10, and Class 1
+//   register-indirect memory / register-register ALU with ext) get
+//   zero-extended.
 //
-//   'width' is the immediate field width of the following instruction (6, 10).
+//   Single ext (ext N), signed target:
+//     extended = sign_extend_{13+width}((N << width) | raw_field)
+//   Single ext, unsigned target:
+//     extended = (N << width) | raw_field   (zero-extended)
+//   Double ext follows the same rule over 26+width bits.
+//
+//   'width' is the immediate field width of the following instruction.
+//   Class 1 ext forms have width == 0 and no immediate operand in the
+//   decoded MCInst; the ext value itself is the displacement/operand.
 //
 //===----------------------------------------------------------------------===//
 
@@ -34,6 +44,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/MathExtras.h"
+#include <optional>
 
 using namespace llvm;
 using namespace llvm::MCD;
@@ -159,13 +170,42 @@ static DecodeStatus decodePCRelSimm8Operand(MCInst &Inst, unsigned Val,
 // Ext-context application
 //===----------------------------------------------------------------------===//
 
-// Return the immediate field bit-width for ext-extendable instructions.
-// Returns 0 for instructions that cannot be extended.
+// Describes how pending ext values should be applied to a target instruction.
+//   Width        Bit-width of the instruction's own immediate field. 0 means
+//                the instruction has no immediate field (Class 1 ext forms:
+//                register-indirect memory, register-register ALU); the ext
+//                value itself provides the displacement/operand.
+//   IsSigned     True if the combined (ext-extended) value should be
+//                sign-extended. Follows the target instruction's imm sign.
+//   HasImmOperand True if the decoded MCInst carries an immediate operand
+//                whose raw bits contribute to the combined value.
+struct ExtApplyInfo {
+  unsigned Width;
+  bool IsSigned;
+  bool HasImmOperand;
+};
+
+// Return ext-apply info for extendable non-PC-relative instructions.
+// Returns std::nullopt if the instruction cannot be extended.
 // PC-relative branch/call instructions (simm8) are handled separately by
 // applyPendingExtPCRel; do NOT list them here.
-static unsigned getExtImmWidth(unsigned Opcode) {
+static std::optional<ExtApplyInfo> getExtApplyInfo(unsigned Opcode) {
   switch (Opcode) {
-  // Class 2: SP-relative memory, 6-bit offset field.
+  // --- Class 3, signed 6-bit immediate: ext sign-extends ---
+  case S1C33::CMP_ri:
+  case S1C33::AND_ri:
+  case S1C33::OR_ri:
+  case S1C33::XOR_ri:
+  case S1C33::NOT_ri:
+  case S1C33::MOV_ri6:   // ld.w %rd, sign6
+    return ExtApplyInfo{6, /*IsSigned=*/true, /*HasImmOperand=*/true};
+
+  // --- Class 3, unsigned 6-bit immediate: ext zero-extends ---
+  case S1C33::ADD_ri:
+  case S1C33::SUB_ri:
+    return ExtApplyInfo{6, /*IsSigned=*/false, /*HasImmOperand=*/true};
+
+  // --- Class 2, SP-relative memory, unsigned 6-bit offset: ext zero-extends ---
   case S1C33::LDB_sp:
   case S1C33::LDUB_sp:
   case S1C33::LDH_sp:
@@ -174,22 +214,39 @@ static unsigned getExtImmWidth(unsigned Opcode) {
   case S1C33::STB_sp:
   case S1C33::STH_sp:
   case S1C33::STW_sp:
-  // Class 3: immediate ALU, 6-bit immediate field.
-  case S1C33::ADD_ri:
-  case S1C33::SUB_ri:
-  case S1C33::AND_ri:
-  case S1C33::OR_ri:
-  case S1C33::XOR_ri:
-  case S1C33::CMP_ri:
-  case S1C33::MOV_ri6:
-  case S1C33::NOT_ri:
-    return 6;
-  // Class 4 SP: 10-bit immediate.
+    return ExtApplyInfo{6, /*IsSigned=*/false, /*HasImmOperand=*/true};
+
+  // --- Class 4 SP, unsigned 10-bit immediate: ext zero-extends ---
+  // (add/sub %sp, imm10 accept ext in principle; no immediate field change)
   case S1C33::ADDSP_i:
   case S1C33::SUBSP_i:
-    return 10;
+    return ExtApplyInfo{10, /*IsSigned=*/false, /*HasImmOperand=*/true};
+
+  // --- Class 1 register-indirect memory: ext adds unsigned displacement ---
+  // No immediate field in the base encoding; the ext value IS the byte
+  // displacement, zero-extended. Negative displacement is NOT representable.
+  case S1C33::LDB_ri:
+  case S1C33::LDUB_ri:
+  case S1C33::LDH_ri:
+  case S1C33::LDUH_ri:
+  case S1C33::LDW_ri:
+  case S1C33::STB_ri:
+  case S1C33::STH_ri:
+  case S1C33::STW_ri:
+  // --- Class 1 register-register ALU: ext converts 2-op to 3-op ---
+  // %rd = %rs <op> zero_ext(ext). The ext value replaces the second source
+  // operand and is zero-extended.
+  case S1C33::ADD_rr:
+  case S1C33::SUB_rr:
+  case S1C33::AND_rr:
+  case S1C33::OR_rr:
+  case S1C33::XOR_rr:
+  case S1C33::CMP_rr:
+  case S1C33::NOT_rr:
+    return ExtApplyInfo{0, /*IsSigned=*/false, /*HasImmOperand=*/false};
+
   default:
-    return 0;
+    return std::nullopt;
   }
 }
 
@@ -228,45 +285,58 @@ void S1C33Disassembler::applyPendingExt(MCInst &Inst,
   if (PendingExt.empty())
     return;
 
-  unsigned Width = getExtImmWidth(Inst.getOpcode());
-  if (Width == 0) {
+  auto Info = getExtApplyInfo(Inst.getOpcode());
+  if (!Info) {
     // This instruction is not extendable; the ext values are lost.
     // (Should not happen in well-formed code.)
     PendingExt.clear();
     return;
   }
 
-  // Find the single immediate operand in the instruction.
-  int ImmIdx = -1;
-  for (unsigned I = 0; I < Inst.getNumOperands(); ++I) {
-    if (Inst.getOperand(I).isImm()) {
-      ImmIdx = (int)I;
-      break;
+  // Recover the raw immediate field bits (undo any sign extension) if the
+  // instruction has an immediate operand. Class 1 ext forms have no imm
+  // field — the ext value alone provides the combined operand.
+  uint64_t RawField = 0;
+  if (Info->HasImmOperand) {
+    int ImmIdx = -1;
+    for (unsigned I = 0; I < Inst.getNumOperands(); ++I) {
+      if (Inst.getOperand(I).isImm()) {
+        ImmIdx = (int)I;
+        break;
+      }
     }
-  }
-  if (ImmIdx < 0) {
-    PendingExt.clear();
-    return;
+    if (ImmIdx < 0) {
+      PendingExt.clear();
+      return;
+    }
+    RawField = (uint64_t)Inst.getOperand(ImmIdx).getImm() &
+               ((1ULL << Info->Width) - 1);
   }
 
-  // Recover the raw immediate field bits (undo any sign extension).
-  uint64_t RawField = (uint64_t)Inst.getOperand(ImmIdx).getImm() &
-                      ((1ULL << Width) - 1);
-
-  int64_t Extended;
+  unsigned Width = Info->Width;
+  uint64_t Combined;
+  unsigned TotalBits;
   if (PendingExt.size() == 1) {
-    // Single ext: sign_extend_19((ext_val << Width) | raw)
-    uint64_t Combined = ((uint64_t)PendingExt[0] << Width) | RawField;
-    Extended = SignExtend64(Combined, 13 + Width);
+    // Single ext: (ext_val << Width) | raw, over 13+Width bits
+    Combined = ((uint64_t)PendingExt[0] << Width) | RawField;
+    TotalBits = 13 + Width;
   } else {
     // Double ext: (ext0 << (13+Width)) | (ext1 << Width) | raw
     // ext0 = PendingExt[0] (first/older = provides highest bits)
     // ext1 = PendingExt[1] (second/newer = provides middle bits)
-    unsigned TotalBits = 13 + 13 + Width;
-    uint64_t Combined = ((uint64_t)PendingExt[0] << (13 + Width)) |
-                        ((uint64_t)PendingExt[1] << Width) | RawField;
-    Extended = SignExtend64(Combined, TotalBits);
+    Combined = ((uint64_t)PendingExt[0] << (13 + Width)) |
+               ((uint64_t)PendingExt[1] << Width) | RawField;
+    TotalBits = 13 + 13 + Width;
   }
+
+  // Signed target instructions sign-extend the combined value; unsigned
+  // target instructions zero-extend. Getting this wrong silently flips
+  // large offsets to negative (or vice versa) in the comment.
+  int64_t Extended;
+  if (Info->IsSigned)
+    Extended = SignExtend64(Combined, TotalBits);
+  else
+    Extended = (int64_t)Combined;
 
   // Leave the operand as decoded (raw sign-extended field value).
   // The extended result is shown only in the comment.

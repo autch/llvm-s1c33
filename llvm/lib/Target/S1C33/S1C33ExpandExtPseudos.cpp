@@ -103,7 +103,12 @@ bool S1C33ExpandExtPseudos::expandMI(MachineBasicBlock &MBB,
   default:
     return false;
 
+  case S1C33::MOV_ri19:
   case S1C33::MOV_ri32: {
+    // Both pseudos share the same expansion.  MOV_ri19 only carries values
+    // in the sign_ext_19-but-not-sign6 range (exactly one ext prefix);
+    // MOV_ri32 carries anything.  emitExtForImm picks the right ext count
+    // from the immediate's value so a single path handles both.
     Register Rd = MI->getOperand(0).getReg();
     int64_t V = MI->getOperand(1).getImm();
 

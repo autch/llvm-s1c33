@@ -180,6 +180,15 @@ def simm13 : Operand<i32> {
 //===----------------------------------------------------------------------===//
 
 def immSExt6  : PatLeaf<(imm), [{ return isInt<6>(N->getSExtValue()); }]>;
+// Signed 19-bit range that excludes signed 6-bit: values materializable with
+// exactly one ext prefix (ext imm13 + ld.w sign6).  Used to route MOV_ri
+// selection so 1-insn and 2-insn constants end up in distinct pseudos (the
+// 2-insn form opts into rematerialization without being marked as
+// as-cheap-as-a-move, unlike the 1-insn form).
+def immSExt19NotSExt6 : PatLeaf<(imm), [{
+  int64_t V = N->getSExtValue();
+  return !isInt<6>(V) && isInt<19>(V);
+}]>;
 def immZExt6  : PatLeaf<(imm), [{ return isUInt<6>(N->getZExtValue()); }]>;
 def immZExt10 : PatLeaf<(imm), [{ return isUInt<10>(N->getZExtValue()); }]>;
 // 13-bit unsigned immediate for ext+[%rb] offset addressing (single ext, [0, 8191]).
@@ -1232,10 +1241,32 @@ let Defs = [SP], Uses = [SP] in {
       [(callseq_end timm:$amt, timm:$amt2)]>;
 }
 
+// MOV_ri19 — load a signed 19-bit immediate that does NOT fit in sign6.
+// Expands to: ext imm13 + ld.w %rd, imm6 (two real instructions).
+//
+// isReMaterializable is set so the allocator may re-create the constant at
+// a use site that would otherwise need a reload from a stack spill.  The
+// flag is only a hint: when both spill and remat are viable the allocator
+// considers the weight of each.  isAsCheapAsAMove is NOT set (unlike
+// MOV_ri6) because two instructions is *not* as cheap as a register copy;
+// leaving it off keeps the allocator from rematerializing aggressively for
+// constants that are better off being spilled once and reloaded N times.
+def MOV_ri19 : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$imm),
+    "# MOV_ri19 $rd, $imm",
+    [(set GR32:$rd, immSExt19NotSExt6:$imm)]> {
+  let isMoveImm = 1;
+  let isReMaterializable = 1;
+  let isAsCheapAsAMove = 1;
+  let hasSideEffects = 0;
+  let mayLoad = 0;
+  let mayStore = 0;
+  let Defs = [PSR];
+}
+
 // MOV_ri32 — load any 32-bit immediate into a register.
 // Expanded by expandPostRAPseudo to:
-//   isInt<6>(V):  ld.w %rd, imm6
-//   isInt<19>(V): ext imm13 + ld.w %rd, imm6
+//   isInt<6>(V):  ld.w %rd, imm6                             [matched by MOV_ri6]
+//   isInt<19>(V): ext imm13 + ld.w %rd, imm6                 [matched by MOV_ri19]
 //   otherwise:    ext imm13_hi + ext imm13_lo + ld.w %rd, imm6
 def MOV_ri32 : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$imm32),
     "# MOV_ri32 $rd, $imm32",

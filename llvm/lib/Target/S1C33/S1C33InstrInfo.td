@@ -971,12 +971,21 @@ let Defs = [PSR], hasSideEffects = 0, SchedRW = [WriteALU] in {
 // PSR updated (N/Z per CPU manual).
 // Operand is i32imm (not simm6) so that expandPostRAPseudo can pass the
 // full intended value V; the MC encoder uses V & 0x3F for the 6-bit field.
+//
+// isReMaterializable + isAsCheapAsAMove tell the register allocator that
+// a 6-bit immediate is as cheap to produce as a register-register copy.
+// Without these hints the allocator spills 1-insn constants to the stack
+// and generates store+reload pairs where rematerialization at the use site
+// is strictly cheaper (same dynamic count, no stack slot needed).
+// PSR liveness across the rematerialized def is tracked through Defs=[PSR].
 def MOV_ri6 : S1C33InstC3<0b011,
     (outs GR32:$rd), (ins simm6:$imm6),
     "ld.w\t$rd, $imm6",
     [(set GR32:$rd, immSExt6:$imm6)]> {
   let hasSideEffects = 0;
   let isMoveImm = 1;
+  let isReMaterializable = 1;
+  let isAsCheapAsAMove = 1;
   let Defs = [PSR];
   let SchedRW = [WriteALU];
 }

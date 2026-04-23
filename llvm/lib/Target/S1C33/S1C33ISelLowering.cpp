@@ -332,7 +332,7 @@ SDValue S1C33TargetLowering::LowerOperation(SDValue Op,
     SDValue Base = DAG.getNode(S1C33ISD::Wrapper, DL, MVT::i32, TGA);
     if (int64_t Offset = N->getOffset())
       return DAG.getNode(ISD::ADD, DL, MVT::i32, Base,
-                         DAG.getConstant(Offset, DL, MVT::i32));
+                         DAG.getSignedConstant(Offset, DL, MVT::i32));
     return Base;
   }
 

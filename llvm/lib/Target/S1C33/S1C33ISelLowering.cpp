@@ -230,7 +230,7 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   // Register DAG combines:
   // - BR_CC, SETCC: sign-bit test optimization (sext_inreg+cmp → and+cmp)
   // - SRL: signed-division-by-power-of-2 bias (shift chain → select_cc)
-  setTargetDAGCombine({ISD::BR_CC, ISD::SETCC, ISD::SRL, ISD::AND});
+  setTargetDAGCombine({ISD::BR_CC, ISD::SETCC, ISD::SRL, ISD::AND, ISD::ADD});
 
   // Post-increment addressing: ld.X %rd, [%rb]+ and ld.X [%rb]+, %rs.
   // S1C33 supports only POST_INC (no PRE_INC/POST_DEC) per CPU Manual §4.3.
@@ -318,10 +318,22 @@ SDValue S1C33TargetLowering::LowerOperation(SDValue Op,
     // can match it as a value-producing node (address materialization).
     // Without the wrapper, TargetGlobalAddress is a leaf that cannot satisfy
     // a CopyToReg when used as a data pointer argument.
+    //
+    // Always split off any nonzero offset into a separate ADD so that multiple
+    // accesses to the same global (e.g. struct field accesses files[i].x,
+    // files[i].y, files[i].z) can share a common base through CSE instead of
+    // each materializing a distinct "sym+N" constant via three ext/ext/ld.w
+    // instructions.  With the base shared, each field access collapses to the
+    // cheaper ext+Lxx_ri_off (add reg, immZExt13) form.
     auto *N = cast<GlobalAddressSDNode>(Op);
-    SDValue TGA = DAG.getTargetGlobalAddress(N->getGlobal(), SDLoc(Op),
-                                             MVT::i32, N->getOffset());
-    return DAG.getNode(S1C33ISD::Wrapper, SDLoc(Op), MVT::i32, TGA);
+    SDLoc DL(Op);
+    SDValue TGA = DAG.getTargetGlobalAddress(N->getGlobal(), DL, MVT::i32,
+                                             /*Offset=*/0);
+    SDValue Base = DAG.getNode(S1C33ISD::Wrapper, DL, MVT::i32, TGA);
+    if (int64_t Offset = N->getOffset())
+      return DAG.getNode(ISD::ADD, DL, MVT::i32, Base,
+                         DAG.getConstant(Offset, DL, MVT::i32));
+    return Base;
   }
 
   case ISD::ExternalSymbol: {
@@ -1337,6 +1349,35 @@ S1C33TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
   return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
 }
 
+// (add (S1C33Wrapper (tga G, 0)), C) → (S1C33Wrapper (tga G, C))
+//
+// LowerGlobalAddress always splits nonzero offsets into a separate ADD so that
+// multiple field accesses to the same global share a common wrapped base via
+// CSE.  When only one user remains, fold the offset back into the wrapped
+// target node so the access collapses to a single ext+ext+ld.w sym+C@l
+// sequence instead of ext+ext+ld.w sym@l + ext C + ld.w [rb] (one extra insn).
+//
+// The Wrapper is also used for TargetExternalSymbol and TargetConstantPool;
+// only fold for GlobalAddress where adjusting the address offset is safe.
+static SDValue combineWrapperAddOffset(SDNode *N, SelectionDAG &DAG) {
+  SDValue LHS = N->getOperand(0);
+  SDValue RHS = N->getOperand(1);
+  if (LHS.getOpcode() != S1C33ISD::Wrapper)
+    std::swap(LHS, RHS);
+  if (LHS.getOpcode() != S1C33ISD::Wrapper || !LHS.hasOneUse())
+    return SDValue();
+  auto *C = dyn_cast<ConstantSDNode>(RHS);
+  if (!C)
+    return SDValue();
+  auto *GA = dyn_cast<GlobalAddressSDNode>(LHS.getOperand(0));
+  if (!GA)
+    return SDValue();
+  SDLoc DL(N);
+  SDValue NewTGA = DAG.getTargetGlobalAddress(
+      GA->getGlobal(), DL, MVT::i32, GA->getOffset() + C->getSExtValue());
+  return DAG.getNode(S1C33ISD::Wrapper, DL, MVT::i32, NewTGA);
+}
+
 SDValue S1C33TargetLowering::PerformDAGCombine(SDNode *N,
                                                 DAGCombinerInfo &DCI) const {
   SelectionDAG &DAG = DCI.DAG;
@@ -1347,6 +1388,8 @@ SDValue S1C33TargetLowering::PerformDAGCombine(SDNode *N,
     return combineSrlSraBias(N, DAG);
   case ISD::AND:
     return combineAndSraBias(N, DAG);
+  case ISD::ADD:
+    return combineWrapperAddOffset(N, DAG);
   default:          return SDValue();
   }
 }

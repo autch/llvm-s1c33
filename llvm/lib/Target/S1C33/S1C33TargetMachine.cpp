@@ -8,8 +8,10 @@
 
 #include "S1C33TargetMachine.h"
 #include "S1C33MachineFunctionInfo.h"
+#include "S1C33TargetTransformInfo.h"
 #include "S1C33.h"
 #include "TargetInfo/S1C33TargetInfo.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
@@ -71,6 +73,11 @@ S1C33TargetMachine::createPassConfig(PassManagerBase &PM) {
 bool S1C33PassConfig::addInstSelector() {
   addPass(createS1C33ISelDag(getS1C33TargetMachine()));
   return false;
+}
+
+TargetTransformInfo
+S1C33TargetMachine::getTargetTransformInfo(const Function &F) const {
+  return TargetTransformInfo(std::make_unique<S1C33TTIImpl>(this, F));
 }
 
 MachineFunctionInfo *S1C33TargetMachine::createMachineFunctionInfo(

@@ -25,6 +25,7 @@ add_llvm_target(S1C33CodeGen
   S1C33RegisterInfo.cpp
   S1C33Subtarget.cpp
   S1C33TargetMachine.cpp
+  S1C33TargetTransformInfo.cpp
 
   LINK_COMPONENTS
   Analysis

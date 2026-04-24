@@ -239,7 +239,7 @@ normalize:
 	ld.w	%r3, 0
 	ext	256
 	ext	0
-	and	%r7, %r11
+	and	%r7, %r11	; # 0x200000
 	jrne	continue2
 	add	%r3, 1
 

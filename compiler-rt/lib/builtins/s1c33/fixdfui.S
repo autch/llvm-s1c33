@@ -35,7 +35,7 @@ __fixunsdfsi:
 	rr	%r10, 1
 	ext	127
 	ext	8191
-	and	%r10, %r13
+	and	%r10, %r13	; # 0xfffff
 	ext	2
 	ext	0
 	or	%r10, 0	; # 0x100000

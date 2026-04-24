@@ -33,7 +33,7 @@ __fixunssfsi:
 	rr	%r10, 1
 	ext	1023
 	ext	8191
-	and	%r10, %r12
+	and	%r10, %r12	; # 0x7fffff
 	ext	16
 	ext	0
 	or	%r10, 0	; # 0x800000

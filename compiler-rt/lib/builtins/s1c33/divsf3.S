@@ -166,7 +166,7 @@ divloop:
 	ld.w	%r3, 0
 	ext	2048
 	ext	0
-	and	%r7, %r10
+	and	%r7, %r10	; # 0x1000000
 	jrne	continue2
 	add	%r3, 1
 

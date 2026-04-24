@@ -27,7 +27,7 @@ define void @call_s28(ptr %p) {
 define void @call_s8(ptr %p) {
 ; CHECK-LABEL: call_s8:
 ; CHECK: sub %sp, 2
-; CHECK: ld.w [%r{{[0-9]+}}],
+; CHECK: ld.w [%sp+{{[0-9]+}}], %r
 ; CHECK: call takes_s8
   call void @takes_s8(ptr byval(%struct.S8) align 4 %p)
   ret void

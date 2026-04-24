@@ -57,8 +57,8 @@ declare i32 @vprintf(ptr %fmt, ...)
 ; CHECK-NOT: ld.w %r13
 ; CHECK-NOT: ld.w %r14
 ; CHECK-NOT: ld.w %r15
-; All three args end up in SP-relative store locations.
-; CHECK: ld.w [%r{{[0-9]+}}
+; All three args end up in SP-relative Class-2 store locations.
+; CHECK: ld.w [%sp+{{[0-9]+}}], %r
 ; CHECK: call vprintf
 define i32 @call_varargs(i32 %x, i32 %y) {
   %r = call i32 (ptr, ...) @vprintf(ptr null, i32 %x, i32 %y)

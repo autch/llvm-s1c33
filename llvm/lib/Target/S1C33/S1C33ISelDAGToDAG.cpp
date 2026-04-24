@@ -60,6 +60,35 @@ char S1C33DAGToDAGISelLegacy::ID = 0;
 
 INITIALIZE_PASS(S1C33DAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false, false)
 
+// Match (CopyFromReg SP) optionally plus a non-negative ConstantSDNode offset.
+// Returns true and writes the byte offset (0 when Addr is CopyFromReg alone) on
+// success.  Used by the LOAD/STORE selection cases to emit Class-2 SP-relative
+// instructions for outgoing call stack arguments, whose addresses arrive as
+// (add (CopyFromReg SP), imm) rather than as a FrameIndex.
+static bool matchSPPlusConstAddr(SDValue Addr, int64_t &ByteOffOut) {
+  auto IsCopyFromSP = [](SDValue V) {
+    if (V.getOpcode() != ISD::CopyFromReg)
+      return false;
+    auto *R = dyn_cast<RegisterSDNode>(V.getOperand(1));
+    return R && R->getReg() == S1C33::SP;
+  };
+  if (IsCopyFromSP(Addr)) {
+    ByteOffOut = 0;
+    return true;
+  }
+  if (Addr.getOpcode() == ISD::ADD && IsCopyFromSP(Addr.getOperand(0))) {
+    auto *C = dyn_cast<ConstantSDNode>(Addr.getOperand(1));
+    if (!C)
+      return false;
+    int64_t Off = C->getSExtValue();
+    if (Off < 0)
+      return false;
+    ByteOffOut = Off;
+    return true;
+  }
+  return false;
+}
+
 void S1C33DAGToDAGISel::Select(SDNode *Node) {
   if (Node->isMachineOpcode()) {
     Node->setNodeId(-1);
@@ -163,8 +192,6 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
     // offset, producing invalid assembly like "ld.ub %r4, [43]".
     LoadSDNode *LD = cast<LoadSDNode>(Node);
     SDValue Addr = LD->getBasePtr();
-    if (Addr.getOpcode() != ISD::TargetFrameIndex)
-      break;
 
     EVT MemVT = LD->getMemoryVT();
     ISD::LoadExtType Ext = LD->getExtensionType();
@@ -182,8 +209,26 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
     else
       break;
 
+    SDValue AddrOp;
+    if (Addr.getOpcode() == ISD::TargetFrameIndex) {
+      AddrOp = Addr;
+    } else {
+      // Match (CopyFromReg SP) [± const] for outgoing call stack arguments,
+      // whose addresses are not frame-indexed.  Encode the scaled offset
+      // directly; eliminateFrameIndex is not involved for this path.
+      int64_t Off;
+      if (!matchSPPlusConstAddr(Addr, Off))
+        break;
+      unsigned Scale = (Opc == S1C33::LDW_sp) ? 4 :
+                       (Opc == S1C33::LDH_sp || Opc == S1C33::LDUH_sp) ? 2 : 1;
+      if ((Off % Scale) != 0 || uint64_t(Off / Scale) >= 64)
+        break;
+      AddrOp = CurDAG->getTargetConstant(Off / Scale, DL, MVT::i32);
+    }
+
     SDNode *New = CurDAG->getMachineNode(Opc, DL, {MVT::i32, MVT::Other},
-                                         {Addr, LD->getChain()});
+                                         {AddrOp, LD->getChain()});
+    CurDAG->setNodeMemRefs(cast<MachineSDNode>(New), {LD->getMemOperand()});
     ReplaceUses(SDValue(Node, 0), SDValue(New, 0));
     ReplaceUses(SDValue(Node, 1), SDValue(New, 1));
     CurDAG->RemoveDeadNode(Node);
@@ -200,8 +245,6 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
     // Same as LOAD: force SP-relative stores when address is a frame index.
     StoreSDNode *ST = cast<StoreSDNode>(Node);
     SDValue Addr = ST->getBasePtr();
-    if (Addr.getOpcode() != ISD::TargetFrameIndex)
-      break;
 
     EVT MemVT = ST->getMemoryVT();
     unsigned Opc;
@@ -214,9 +257,26 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
     else
       break;
 
+    SDValue AddrOp;
+    if (Addr.getOpcode() == ISD::TargetFrameIndex) {
+      AddrOp = Addr;
+    } else {
+      // Match (CopyFromReg SP) [+ const] for outgoing call stack arguments.
+      // These arrive as (add (CopyFromReg SP), imm) rather than frame indices.
+      int64_t Off;
+      if (!matchSPPlusConstAddr(Addr, Off))
+        break;
+      unsigned Scale = (Opc == S1C33::STW_sp) ? 4 :
+                       (Opc == S1C33::STH_sp) ? 2 : 1;
+      if ((Off % Scale) != 0 || uint64_t(Off / Scale) >= 64)
+        break;
+      AddrOp = CurDAG->getTargetConstant(Off / Scale, DL, MVT::i32);
+    }
+
     // STX_sp operand order: (ins mem_sp:$imm6, GR32:$rd)
     SDNode *New = CurDAG->getMachineNode(Opc, DL, MVT::Other,
-                                         {Addr, ST->getValue(), ST->getChain()});
+                                         {AddrOp, ST->getValue(), ST->getChain()});
+    CurDAG->setNodeMemRefs(cast<MachineSDNode>(New), {ST->getMemOperand()});
     ReplaceUses(SDValue(Node, 0), SDValue(New, 0));
     CurDAG->RemoveDeadNode(Node);
     return;

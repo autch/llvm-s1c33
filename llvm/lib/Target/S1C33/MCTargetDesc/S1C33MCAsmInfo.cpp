@@ -32,9 +32,13 @@ S1C33MCAsmInfo::S1C33MCAsmInfo(const Triple & /*TheTriple*/,
   // MCSymbolRefExpr nodes with these specifier IDs.
   // S1C33MCCodeEmitter::getMachineOpValue maps these to fixup_s1c33_abs_l/m/h.
   static const AtSpecifier AtSpecifiers[] = {
-      {S1C33::S_ABS_L, "l"},
-      {S1C33::S_ABS_M, "m"},
-      {S1C33::S_ABS_H, "h"},
+      {S1C33::S_ABS_L,  "l"},
+      {S1C33::S_ABS_M,  "m"},
+      {S1C33::S_ABS_H,  "h"},
+      // 26-bit absolute split for the `ext sym@ah / ext sym@al / ld.* [%r8]`
+      // pattern.  Names follow gcc33/as33 convention (historical SRF naming).
+      {S1C33::S_ABS_AH, "ah"},
+      {S1C33::S_ABS_AL, "al"},
   };
   initializeAtSpecifiers(AtSpecifiers);
 }

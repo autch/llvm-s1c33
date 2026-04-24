@@ -49,6 +49,10 @@ public:
         {"fixup_s1c33_abs_m", 0, 13, 0},
         // fixup_s1c33_abs_l: bits[5:0] of absolute addr → ld.w imm6 field.
         {"fixup_s1c33_abs_l", 4, 6, 0},
+        // fixup_s1c33_abs_ah: bits[25:13] of 26-bit absolute addr → ext_hi imm13.
+        {"fixup_s1c33_abs_ah", 0, 13, 0},
+        // fixup_s1c33_abs_al: bits[12:0] of 26-bit absolute addr → ext_lo imm13.
+        {"fixup_s1c33_abs_al", 0, 13, 0},
     };
     static_assert(std::size(Infos) == S1C33::NumTargetFixupKinds,
                   "Fixup kinds table size mismatch");
@@ -159,6 +163,25 @@ public:
       uint8_t Sign6Raw = static_cast<uint8_t>(Value & 0x3F);
       Data[0] |= static_cast<uint8_t>(Sign6Raw << 4);
       Data[1] |= static_cast<uint8_t>((Sign6Raw >> 4) & 0x03);
+      return;
+    }
+
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_ah) {
+      // 26-bit absolute address: bits[25:13] into the hi ext's imm13 field.
+      // P/ECE memory map fits in 26 bits; anything beyond is a linker error.
+      if (static_cast<uint64_t>(Value) >> 26)
+        Asm->getContext().reportError(
+            Fixup.getLoc(),
+            "absolute address does not fit in 26 bits for [%r8] addressing");
+      uint32_t Imm13 = ((uint32_t)Value >> 13) & 0x1FFF;
+      Data[0] = static_cast<uint8_t>(Imm13 & 0xFF);
+      Data[1] = static_cast<uint8_t>(0xC0 | ((Imm13 >> 8) & 0x1F));
+      return;
+    }
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_al) {
+      uint32_t Imm13 = (uint32_t)Value & 0x1FFF;
+      Data[0] = static_cast<uint8_t>(Imm13 & 0xFF);
+      Data[1] = static_cast<uint8_t>(0xC0 | ((Imm13 >> 8) & 0x1F));
       return;
     }
 

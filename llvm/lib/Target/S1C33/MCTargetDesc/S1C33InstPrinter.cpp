@@ -63,6 +63,53 @@ void S1C33InstPrinter::printInst(const MCInst *MI, uint64_t Address,
     return;
   }
 
+  // *_ABS pseudos: print the expanded 3-instruction form
+  //   ext sym@ah
+  //   ext sym@al
+  //   ld.* %rd, [%r8]    (loads)
+  //   ld.* [%r8], %rs    (stores)
+  // so that the assembly round-trips through llvm-mc with the correct
+  // R_S1C33_REL_AH/REL_AL fixups (gcc33-compatible syntax).
+  if (Opc == S1C33::LDB_ABS || Opc == S1C33::LDUB_ABS ||
+      Opc == S1C33::LDH_ABS || Opc == S1C33::LDUH_ABS ||
+      Opc == S1C33::LDW_ABS || Opc == S1C33::STB_ABS ||
+      Opc == S1C33::STH_ABS || Opc == S1C33::STW_ABS) {
+    const char *Mnemonic = nullptr;
+    bool IsStore = false;
+    switch (Opc) {
+    case S1C33::LDB_ABS:  Mnemonic = "ld.b";  break;
+    case S1C33::LDUB_ABS: Mnemonic = "ld.ub"; break;
+    case S1C33::LDH_ABS:  Mnemonic = "ld.h";  break;
+    case S1C33::LDUH_ABS: Mnemonic = "ld.uh"; break;
+    case S1C33::LDW_ABS:  Mnemonic = "ld.w";  break;
+    case S1C33::STB_ABS:  Mnemonic = "ld.b";  IsStore = true; break;
+    case S1C33::STH_ABS:  Mnemonic = "ld.h";  IsStore = true; break;
+    case S1C33::STW_ABS:  Mnemonic = "ld.w";  IsStore = true; break;
+    }
+    const MCOperand &SymOp = MI->getOperand(IsStore ? 0 : 1);
+    const MCOperand &Reg   = MI->getOperand(IsStore ? 1 : 0);
+    assert(SymOp.isExpr() && "*_ABS pseudo sym operand must be an expression");
+    const MCExpr *SymExpr = SymOp.getExpr();
+
+    auto printModified = [&](StringRef Mod) {
+      MAI.printExpr(O, *SymExpr);
+      O << '@' << Mod;
+    };
+
+    O << "\text\t"; printModified("ah");
+    O << "\n\text\t"; printModified("al");
+    if (IsStore) {
+      O << "\n\t" << Mnemonic << "\t[%r8], ";
+      printRegName(O, Reg.getReg());
+    } else {
+      O << "\n\t" << Mnemonic << "\t";
+      printRegName(O, Reg.getReg());
+      O << ", [%r8]";
+    }
+    printAnnotation(O, Annot);
+    return;
+  }
+
   if (!printAliasInstr(MI, Address, O))
     printInstruction(MI, Address, O);
 

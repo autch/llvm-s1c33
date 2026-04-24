@@ -91,10 +91,63 @@ static uint16_t getExt2BranchWord(unsigned Opcode) {
   }
 }
 
+// Return the Class 1 memory base word (rb=R8) for an *_ABS pseudo, or 0 if
+// Opcode is not an *_ABS pseudo.  Encoding: |001|op1(3)|00|rb(4)|rd(4)|
+// with rb=8 (R8 encoding) → low byte = (op1<<2) | 0b00 | (rb_hi=1)(rb_lo=0)
+// Laid out explicitly per opcode for clarity.
+static uint16_t getAbsPseudoBaseWord(unsigned Opcode, bool &IsStore) {
+  IsStore = false;
+  switch (Opcode) {
+  // Loads: rd is output.  op1: b=000, ub=001, h=010, uh=011, w=100.
+  case S1C33::LDB_ABS:  return 0x2080; // 001 000 00 1000 xxxx
+  case S1C33::LDUB_ABS: return 0x2480; // 001 001 00 1000 xxxx
+  case S1C33::LDH_ABS:  return 0x2880; // 001 010 00 1000 xxxx
+  case S1C33::LDUH_ABS: return 0x2C80; // 001 011 00 1000 xxxx
+  case S1C33::LDW_ABS:  return 0x3080; // 001 100 00 1000 xxxx
+  // Stores: rs (source) is placed in the rd field of the encoding.
+  case S1C33::STB_ABS:  IsStore = true; return 0x3480; // 001 101 00 1000 xxxx
+  case S1C33::STH_ABS:  IsStore = true; return 0x3880; // 001 110 00 1000 xxxx
+  case S1C33::STW_ABS:  IsStore = true; return 0x3C80; // 001 111 00 1000 xxxx
+  default:              return 0;
+  }
+}
+
 void S1C33MCCodeEmitter::encodeInstruction(const MCInst &Inst,
                                             SmallVectorImpl<char> &CB,
                                             SmallVectorImpl<MCFixup> &Fixups,
                                             const MCSubtargetInfo &STI) const {
+  // R8-absolute memory pseudos: LDW_ABS / LDB_ABS / STW_ABS etc.
+  // Operand layout:
+  //   Loads:  (outs GR32:$rd), (ins i32imm:$sym)   → rd at 0, sym at 1
+  //   Stores: (outs), (ins i32imm:$sym, GR32:$rs)  → sym at 0, rs at 1
+  // Emit 6 bytes: ext(0xC000) + ext(0xC000) + Class1Mem word.
+  // Fixups: abs_ah@0, abs_al@2.
+  {
+    bool IsStore = false;
+    if (uint16_t BaseWord = getAbsPseudoBaseWord(Inst.getOpcode(), IsStore)) {
+      const MCExpr *Sym;
+      unsigned RegEnc;
+      if (IsStore) {
+        Sym = Inst.getOperand(0).getExpr();
+        RegEnc = Ctx.getRegisterInfo()->getEncodingValue(
+            Inst.getOperand(1).getReg());
+      } else {
+        RegEnc = Ctx.getRegisterInfo()->getEncodingValue(
+            Inst.getOperand(0).getReg());
+        Sym = Inst.getOperand(1).getExpr();
+      }
+      uint16_t MemWord = BaseWord | (RegEnc & 0x0F);
+      support::endian::write<uint16_t>(CB, 0xC000, llvm::endianness::little);
+      support::endian::write<uint16_t>(CB, 0xC000, llvm::endianness::little);
+      support::endian::write<uint16_t>(CB, MemWord, llvm::endianness::little);
+      Fixups.push_back(MCFixup::create(
+          0, Sym, (MCFixupKind)S1C33::fixup_s1c33_abs_ah, /*PCRel=*/false));
+      Fixups.push_back(MCFixup::create(
+          2, Sym, (MCFixupKind)S1C33::fixup_s1c33_abs_al, /*PCRel=*/false));
+      return;
+    }
+  }
+
   // Global address materialization: LDW_SYM_EXT0/EXT1/EXT2.
   // Operand 0: GR32 destination register. Operand 1: MCExpr symbol.
   // EXT0: ld.w %rd, sym@l  (2 bytes, abs_l fixup at offset 0)
@@ -206,6 +259,14 @@ unsigned S1C33MCCodeEmitter::getMachineOpValue(
       return 0;
     case S1C33::S_ABS_L:
       FK = (MCFixupKind)S1C33::fixup_s1c33_abs_l;
+      Fixups.push_back(MCFixup::create(0, Expr, FK, /*PCRel=*/false));
+      return 0;
+    case S1C33::S_ABS_AH:
+      FK = (MCFixupKind)S1C33::fixup_s1c33_abs_ah;
+      Fixups.push_back(MCFixup::create(0, Expr, FK, /*PCRel=*/false));
+      return 0;
+    case S1C33::S_ABS_AL:
+      FK = (MCFixupKind)S1C33::fixup_s1c33_abs_al;
       Fixups.push_back(MCFixup::create(0, Expr, FK, /*PCRel=*/false));
       return 0;
     default:

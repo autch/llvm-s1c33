@@ -27,13 +27,18 @@
 namespace llvm {
 namespace S1C33 {
 
-/// Specifier kinds for @l/@m/@h address modifiers.
+/// Specifier kinds for @l/@m/@h and @ah/@al address modifiers.
 /// These are stored in MCSymbolRefExpr::getSpecifier().
 /// Values must be >= MCSymbolRefExpr::FirstTargetSpecifier (= 4).
 enum Specifier : uint32_t {
-  S_ABS_L = 4, ///< sym@l — bits[5:0],  sign6 field of ld.w
-  S_ABS_M = 5, ///< sym@m — bits[18:6],  imm13 field of ext
-  S_ABS_H = 6, ///< sym@h — bits[31:19], imm13 field of ext
+  S_ABS_L  = 4, ///< sym@l  — bits[5:0],   sign6 field of ld.w
+  S_ABS_M  = 5, ///< sym@m  — bits[18:6],  imm13 field of ext
+  S_ABS_H  = 6, ///< sym@h  — bits[31:19], imm13 field of ext
+  // 26-bit absolute split, used for `ext sym@ah / ext sym@al / ld.* [%r8]`.
+  // Compatible with gcc33's syntax.  'ah/al' is historically named for SRF
+  // REL_AH/REL_AL relocations, but the effective semantics is absolute.
+  S_ABS_AH = 7, ///< sym@ah — bits[25:13], imm13 field of ext (hi)
+  S_ABS_AL = 8, ///< sym@al — bits[12:0],  imm13 field of ext (lo)
 };
 
 } // namespace S1C33

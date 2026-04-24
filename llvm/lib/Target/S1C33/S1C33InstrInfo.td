@@ -551,6 +551,45 @@ def LDW_SYM_EXT2 : S1C33PseudoAddrN<6, (outs GR32:$rd), (ins i32imm:$sym),
     "ld.w\t$rd, $sym", []>;
 }
 
+//===----------------------------------------------------------------------===//
+// R8-absolute load/store pseudos
+//
+// Expanded by MCCodeEmitter into:
+//   ext  sym@ah           ; bits[25:13]
+//   ext  sym@al           ; bits[12:0]
+//   ld.* $rd, [%r8]       ; or ld.* [%r8], $rs  — R8 is always 0
+//
+// Always 6 bytes, no relaxation.  Selected by ISelDAGToDAG only when the
+// S1C33ISD::Wrapper around the global address has a single use (otherwise
+// the existing LDW_SYM_EXT2 materialization path is more compact).
+//
+// Class 1 memory loads/stores do not update PSR, so no Defs=[PSR].  The
+// address is a 26-bit absolute value; AsmBackend reports an error if the
+// symbol resolves outside that range.  Compatible with gcc33's @ah/@al.
+//===----------------------------------------------------------------------===//
+
+let mayLoad = 1, SchedRW = [WriteLd] in {
+def LDB_ABS  : S1C33PseudoAddrN<6, (outs GR32:$rd), (ins i32imm:$sym),
+    "ld.b\t$rd, $sym",  []>;
+def LDUB_ABS : S1C33PseudoAddrN<6, (outs GR32:$rd), (ins i32imm:$sym),
+    "ld.ub\t$rd, $sym", []>;
+def LDH_ABS  : S1C33PseudoAddrN<6, (outs GR32:$rd), (ins i32imm:$sym),
+    "ld.h\t$rd, $sym",  []>;
+def LDUH_ABS : S1C33PseudoAddrN<6, (outs GR32:$rd), (ins i32imm:$sym),
+    "ld.uh\t$rd, $sym", []>;
+def LDW_ABS  : S1C33PseudoAddrN<6, (outs GR32:$rd), (ins i32imm:$sym),
+    "ld.w\t$rd, $sym",  []>;
+}
+
+let mayStore = 1, SchedRW = [WriteALU] in {
+def STB_ABS : S1C33PseudoAddrN<6, (outs), (ins i32imm:$sym, GR32:$rs),
+    "ld.b\t$sym, $rs", []>;
+def STH_ABS : S1C33PseudoAddrN<6, (outs), (ins i32imm:$sym, GR32:$rs),
+    "ld.h\t$sym, $rs", []>;
+def STW_ABS : S1C33PseudoAddrN<6, (outs), (ins i32imm:$sym, GR32:$rs),
+    "ld.w\t$sym, $rs", []>;
+}
+
 // int imm2 — Software exception  (op1=0010, d=0, op2=10) → 0x0480|imm2
 def INT : S1C33InstC0Imm2<0b0010, 0, 0b10,
     (outs), (ins i32imm:$imm2), "int\t$imm2", []> {

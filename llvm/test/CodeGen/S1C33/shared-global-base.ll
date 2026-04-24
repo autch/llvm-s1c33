@@ -32,13 +32,14 @@ define void @setfields(i32 %i, i8 %iconf, i32 %length, i32 %adrs) {
 }
 
 ; Single-use nonzero offset: offset is folded back into the wrapped target
-; global address, producing a single ext/ext/ld.w arr+40@l sequence.
+; global address.  With R8 absolute addressing enabled (default), the load
+; collapses to `ext arr+40@ah / ext arr+40@al / ld.w %rd, [%r8]` — 6 bytes
+; vs 8 bytes for the materialize-then-indirect-load path.
 define i32 @load_one_field() {
 ; CHECK-LABEL: load_one_field:
-; CHECK:       ext arr+40@h
-; CHECK-NEXT:  ext arr+40@m
-; CHECK-NEXT:  ld.w {{%r[0-9]+}}, arr+40@l
-; CHECK-NEXT:  ld.w {{%r[0-9]+}}, [{{%r[0-9]+}}]
+; CHECK:       ext arr+40@ah
+; CHECK-NEXT:  ext arr+40@al
+; CHECK-NEXT:  ld.w {{%r[0-9]+}}, [%r8]
 ; CHECK-NEXT:  ret
   %p = getelementptr inbounds %struct.S, ptr @arr, i32 0, i32 3
   %v = load i32, ptr %p

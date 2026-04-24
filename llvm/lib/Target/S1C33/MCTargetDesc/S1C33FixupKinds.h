@@ -47,6 +47,15 @@ enum Fixups {
   fixup_s1c33_abs_m, // bits[18:6] of absolute addr → ext_m imm13 field
   fixup_s1c33_abs_l, // bits[5:0] of absolute addr → ld.w imm6 field
 
+  // 26-bit absolute address fixups for the ext+ext+ld.*[%r8] pattern used to
+  // access globals through the kernel's known-zero R8.  The address is split
+  // into two 13-bit halves; there is no sign6 tail since Class 1 memory ops
+  // have no immediate field.  Compatible with gcc33's @ah/@al syntax and the
+  // R_S1C33_REL_AH/REL_AL ELF relocations (name is historical; semantics are
+  // absolute).
+  fixup_s1c33_abs_ah, // bits[25:13] of absolute addr → ext_hi imm13 field
+  fixup_s1c33_abs_al, // bits[12:0] of absolute addr → ext_lo imm13 field
+
   // Marker.
   LastTargetFixupKind,
   NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind

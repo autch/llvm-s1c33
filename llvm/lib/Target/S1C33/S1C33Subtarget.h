@@ -26,6 +26,10 @@ class S1C33Subtarget : public S1C33GenSubtargetInfo {
   // SubtargetFeature: S1C33209 optional hardware multiplier.
   bool HasHWMul = false;
 
+  // SubtargetFeature: enable R8-based absolute addressing for single-use
+  // globals.  Default true.  Toggle with -mattr=+/-r8-abs.
+  bool HasR8AbsGlobal = false;
+
   SelectionDAGTargetInfo TSInfo;
   S1C33InstrInfo InstrInfo;
   S1C33FrameLowering FrameLowering;
@@ -41,6 +45,8 @@ public:
   S1C33Subtarget &initializeSubtargetDependencies(StringRef CPU, StringRef FS);
 
   bool hasHWMul() const { return HasHWMul; }
+
+  bool hasR8AbsGlobal() const { return HasR8AbsGlobal; }
 
   // Enable post-RA list scheduler to use the SchedMachineModel latencies
   // for reordering instructions (e.g., hiding load-use penalties).

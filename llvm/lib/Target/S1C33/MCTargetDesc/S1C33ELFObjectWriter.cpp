@@ -70,6 +70,13 @@ public:
       return R_S1C33_ABS_M;
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_l)
       return R_S1C33_ABS_L;
+    // 26-bit absolute split (for ext/ext/ld.*[%r8] pattern).  Reuses the
+    // existing REL_AH/REL_AL numbers (10/11) — the 'REL_' prefix is historical
+    // from gcc33 SRF naming; the effective semantics is absolute.
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_ah)
+      return R_S1C33_REL_AH;
+    if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_al)
+      return R_S1C33_REL_AL;
 
     // Standard LLVM fixup kinds: used by eh_frame / debug info data.
     switch (Kind) {

@@ -60,6 +60,13 @@ public:
   const S1C33TargetLowering *getTargetLowering() const override {
     return &TLInfo;
   }
+
+  // Register runtime libcall implementations at module analysis level so that
+  // PreISelIntrinsicLowering's canEmitMemcpy/canEmitLibcall checks succeed and
+  // large llvm.memcpy/memmove/memset intrinsics lower to libcalls instead of
+  // being expanded into byte-copy loops (triggered when size exceeds
+  // TTI::getMaxMemIntrinsicInlineSizeThreshold, default 64).
+  void initLibcallLoweringInfo(LibcallLoweringInfo &Info) const override;
 };
 
 } // namespace llvm

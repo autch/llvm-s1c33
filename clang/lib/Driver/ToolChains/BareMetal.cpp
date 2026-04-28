@@ -723,10 +723,17 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       // division, 64-bit arithmetic) replacing the old libfp.a / libidiv.a.
       // Using --start-group/--end-group to handle circular references between
       // libraries (e.g. libio calls libstring, liblib calls libmath).
+      //
+      // Stage A migration (newlib Phase 2): -lc -lm precede the EPSON SDK
+      // libs so newlib's malloc / printf / sin / etc. resolve first.  EPSON
+      // libs remain as a fallback for any newlib-missing symbol.  After all
+      // sample apps verify, the EPSON libs will be removed (Stage B).
       CmdArgs.push_back("-lclang_rt.builtins-s1c33");
       CmdArgs.push_back("--start-group");
       CmdArgs.push_back("-lcxxrt");
       CmdArgs.push_back("-lpceapi");
+      CmdArgs.push_back("-lc");
+      CmdArgs.push_back("-lm");
       CmdArgs.push_back("-lio");
       CmdArgs.push_back("-llib");
       CmdArgs.push_back("-lmath");

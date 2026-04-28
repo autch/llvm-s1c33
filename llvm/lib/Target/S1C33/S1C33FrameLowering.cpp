@@ -114,9 +114,15 @@ void S1C33FrameLowering::emitPrologue(MachineFunction &MF,
   //
   // S1C33 hardware interprets the imm10 field in word units (×4).
   // gcc33 encodes "sub %sp, 0x8" for 32 bytes (8 words × 4).
-  uint64_t StackSize = MFI.getStackSize();
+  //
+  // Round StackSize up to a multiple of 4.  TargetFrameLowering's
+  // StackAlignment=Align(4) covers the top of the frame, but individual
+  // object alignment plus odd-size objects (e.g. i8 spills) can leave the
+  // total un-aligned.  Pad here and write the adjusted size back so
+  // eliminateFrameIndex sees the same value.
+  uint64_t StackSize = alignTo(MFI.getStackSize(), 4);
+  MFI.setStackSize(StackSize);
   if (StackSize > 0) {
-    assert((StackSize & 3) == 0 && "Stack size must be 4-byte aligned");
     uint64_t WordSize = StackSize / 4;
     assert(WordSize <= 1023 && "Stack frame too large for SUBSP_i imm10");
     BuildMI(MBB, MBBI, DL, TII.get(S1C33::SUBSP_i))
@@ -141,9 +147,10 @@ void S1C33FrameLowering::emitEpilogue(MachineFunction &MF,
 
   // Free local variable space (insert before MBBI = ret/reti).
   // S1C33 hardware interprets the imm10 field in word units (×4).
+  // emitPrologue rounded MFI's stack size up to a multiple of 4 already.
   uint64_t StackSize = MFI.getStackSize();
+  assert((StackSize & 3) == 0 && "Stack size not aligned by emitPrologue");
   if (StackSize > 0) {
-    assert((StackSize & 3) == 0 && "Stack size must be 4-byte aligned");
     uint64_t WordSize = StackSize / 4;
     assert(WordSize <= 1023 && "Stack frame too large for ADDSP_i imm10");
     BuildMI(MBB, MBBI, DL, TII.get(S1C33::ADDSP_i))

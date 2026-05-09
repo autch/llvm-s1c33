@@ -31,6 +31,12 @@ public:
                             RegScavenger *RS = nullptr) const override;
 
   Register getFrameRegister(const MachineFunction &MF) const override;
+
+  bool getRegAllocationHints(Register VirtReg, ArrayRef<MCPhysReg> Order,
+                              SmallVectorImpl<MCPhysReg> &Hints,
+                              const MachineFunction &MF,
+                              const VirtRegMap *VRM = nullptr,
+                              const LiveRegMatrix *Matrix = nullptr) const override;
 };
 
 } // namespace llvm

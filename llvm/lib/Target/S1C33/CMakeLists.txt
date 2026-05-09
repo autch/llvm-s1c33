@@ -19,6 +19,7 @@ add_llvm_target(S1C33CodeGen
   S1C33DelaySlotFiller.cpp
   S1C33ExpandExtPseudos.cpp
   S1C33FrameLowering.cpp
+  S1C33HoistImmInLoop.cpp
   S1C33InstrInfo.cpp
   S1C33ISelDAGToDAG.cpp
   S1C33ISelLowering.cpp

@@ -296,3 +296,83 @@ Register
 S1C33RegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   return S1C33::SP;
 }
+
+// Return true if VirtReg's live range crosses any call instruction.
+// Heuristic: walk machine basic blocks in layout order and look for the
+// pattern "def of VirtReg ... call ... use of VirtReg". We over-estimate
+// in irreducible CFGs, but the result is just a hint to the register
+// allocator -- an over-hint nudges values toward callee-saved regs but
+// does not force the choice.
+static bool vregCrossesCall(Register VirtReg, const MachineFunction &MF) {
+  bool SeenDef = false;
+  bool CallAfterDef = false;
+  for (const MachineBasicBlock &MBB : MF) {
+    for (const MachineInstr &MI : MBB) {
+      if (MI.isDebugInstr())
+        continue;
+      bool Defines = false, Uses = false;
+      for (const MachineOperand &MO : MI.operands()) {
+        if (!MO.isReg() || MO.getReg() != VirtReg)
+          continue;
+        if (MO.isDef())
+          Defines = true;
+        else
+          Uses = true;
+      }
+      if (!SeenDef) {
+        if (Defines)
+          SeenDef = true;
+        continue;
+      }
+      if (MI.isCall())
+        CallAfterDef = true;
+      if (Uses && CallAfterDef)
+        return true;
+    }
+  }
+  return false;
+}
+
+bool S1C33RegisterInfo::getRegAllocationHints(
+    Register VirtReg, ArrayRef<MCPhysReg> Order,
+    SmallVectorImpl<MCPhysReg> &Hints, const MachineFunction &MF,
+    const VirtRegMap *VRM, const LiveRegMatrix *Matrix) const {
+  // Collect copy-related hints from the base implementation first so they
+  // remain the highest priority.
+  bool BaseRet = TargetRegisterInfo::getRegAllocationHints(
+      VirtReg, Order, Hints, MF, VRM, Matrix);
+
+  // Only the GR32 class is steered.  Argument/return/special classes lower
+  // through the calling convention and shouldn't get extra hints.
+  if (MF.getRegInfo().getRegClass(VirtReg) != &S1C33::GR32RegClass)
+    return BaseRet;
+
+  // Quick reject: leaf functions have no calls, so no live range can cross
+  // one.  Falling through here would just waste cycles.
+  bool HasCall = false;
+  for (const MachineBasicBlock &MBB : MF) {
+    for (const MachineInstr &MI : MBB) {
+      if (MI.isCall()) {
+        HasCall = true;
+        break;
+      }
+    }
+    if (HasCall)
+      break;
+  }
+  if (!HasCall)
+    return BaseRet;
+
+  if (!vregCrossesCall(VirtReg, MF))
+    return BaseRet;
+
+  // Steer call-crossing values toward callee-saved R0-R3.  These survive
+  // calls without spilling; without this hint the greedy allocator picks
+  // caller-saved R4-R7/R9 first (per the GR32 alloc order) and is forced
+  // to spill the value across each call.
+  for (MCPhysReg P : { S1C33::R0, S1C33::R1, S1C33::R2, S1C33::R3 }) {
+    if (is_contained(Order, P) && !is_contained(Hints, P))
+      Hints.push_back(P);
+  }
+  return BaseRet;
+}

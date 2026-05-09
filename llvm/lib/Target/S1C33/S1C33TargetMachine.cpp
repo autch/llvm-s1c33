@@ -60,6 +60,7 @@ public:
   }
 
   bool addInstSelector() override;
+  void addPreRegAlloc() override;
   void addPreEmitPass() override;
 };
 
@@ -87,7 +88,20 @@ MachineFunctionInfo *S1C33TargetMachine::createMachineFunctionInfo(
                                                                      F, STI);
 }
 
+void S1C33PassConfig::addPreRegAlloc() {
+  // Hoist same-immediate uses of *_rri pseudos out of loops by materializing
+  // the constant once in the preheader and rewriting in-loop uses to the
+  // 2-address reg-reg form. MachineLICM cannot do this because the immediate
+  // is fused into the *_rri instruction. Skipped at -O0.
+  if (getOptLevel() != CodeGenOptLevel::None)
+    addPass(createS1C33HoistImmInLoopPass());
+}
+
 void S1C33PassConfig::addPreEmitPass() {
+  // O1/O2 differentiation is delegated to the IR-level pipeline (loop unroll,
+  // vectorization gates, AA aggressiveness). The machine-level pipeline is
+  // identical for both opt levels by design.
+
   // Expand ext-producing pseudos (MOV_ri32, ALU_ri32, offset loads/stores)
   // AFTER the post-RA scheduler so that ext+target pairs aren't split.
   addPass(createS1C33ExpandExtPseudosPass());

@@ -52,6 +52,15 @@ public:
   // for reordering instructions (e.g., hiding load-use penalties).
   bool enablePostRAScheduler() const override { return true; }
 
+  // Use the pre-RA MachineScheduler instead of the SelectionDAG list
+  // scheduler.  The default SDAG scheduler ("list-burr") minimizes register
+  // pressure aggressively and sinks computations across calls -- in
+  // fpkplay/decode.c this turned a 4-byte OR chain that fits in one
+  // callee-saved register into 3 stack-spilled bytes plus a post-call
+  // rebuild.  MachineScheduler treats calls as scheduling barriers and
+  // honors the latencies described in S1C33Schedule.td.
+  bool enableMachineScheduler() const override { return true; }
+
   const SelectionDAGTargetInfo *getSelectionDAGInfo() const override {
     return &TSInfo;
   }

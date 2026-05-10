@@ -21,9 +21,10 @@
 ; CHECK: sub %sp, 20
 ; Both halfword offsets (15, 16) fit in 6 bits — no ext prefix
 ; CHECK-NOT: ext
-; CHECK: ld.h [%sp+16],
-; CHECK-NOT: ext
-; CHECK: ld.h [%sp+15],
+; The two stores are independent; the scheduler may emit them in either
+; order, so CHECK-DAG accepts both sequences.
+; CHECK-DAG: ld.h [%sp+16],
+; CHECK-DAG: ld.h [%sp+15],
 define void @half_array(i32 %x) {
   %buf = alloca [40 x i16], align 2
   %p15 = getelementptr [40 x i16], ptr %buf, i32 0, i32 15

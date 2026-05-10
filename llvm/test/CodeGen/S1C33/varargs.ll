@@ -82,10 +82,10 @@ define i32 @call_varargs(i32 %x, i32 %y) {
 ; va_start materialises SP+16 into a register.
 ; CHECK: ld.w %r{{[0-9]+}}, %sp
 ; CHECK-NEXT: add %r{{[0-9]+}}, 16
-; Store address to va1.
-; CHECK: ld.w [%sp+0], %r{{[0-9]+}}
-; va_copy stores the same address to va2.
-; CHECK: ld.w [%sp+1], %r{{[0-9]+}}
+; va1 and va2 receive the same address; the two stores are independent and
+; the scheduler may emit them in either order.
+; CHECK-DAG: ld.w [%sp+0], %r{{[0-9]+}}
+; CHECK-DAG: ld.w [%sp+1], %r{{[0-9]+}}
 ; CHECK: ret
 define i32 @varargs_copy(i32 %n, ...) {
   %va1 = alloca ptr, align 4
@@ -107,8 +107,10 @@ define i32 @varargs_copy(i32 %n, ...) {
 
 ; CHECK-LABEL: sum:
 ; va_start sets va = SP+20 (12 bytes local + 4 retaddr + 4 for %n).
-; CHECK: ld.w %r{{[0-9]+}}, %sp
-; CHECK-NEXT: add %r{{[0-9]+}}, 20
+; The "ld.w %rN, %sp" + "add %rN, 20" pair must address the same register;
+; the scheduler may interleave an independent prologue load between them.
+; CHECK: ld.w [[VA:%r[0-9]+]], %sp
+; CHECK: add [[VA]], 20
 ; In the loop body, the pointer is dereferenced and advanced by 4 via
 ; post-increment load (load + GEP+4 are fused into ld.w [%rb]+).
 ; CHECK: ld.w %r{{[0-9]+}}, [%r{{[0-9]+}}]+

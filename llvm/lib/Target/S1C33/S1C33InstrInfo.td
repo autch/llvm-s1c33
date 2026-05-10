@@ -239,21 +239,25 @@ def ImmAsTarget : SDNodeXForm<imm, [{
 // nop  (op1=0000, d=0, op2=00) → 0x0000
 def NOP : S1C33InstC0<0b0000, 0, 0b00, (outs), (ins), "nop", []> {
   let hasSideEffects = 0;
+  let SchedRW = [WriteSys];
 }
 
 // slp — Sleep mode  (op1=0000, d=0, op2=01) → 0x0040
 def SLP : S1C33InstC0<0b0000, 0, 0b01, (outs), (ins), "slp", []> {
   let hasSideEffects = 1;
+  let SchedRW = [WriteSys];
 }
 
 // halt — HALT mode  (op1=0000, d=0, op2=10) → 0x0080
 def HALT : S1C33InstC0<0b0000, 0, 0b10, (outs), (ins), "halt", []> {
   let hasSideEffects = 1;
+  let SchedRW = [WriteSys];
 }
 
 // brk — Debug software exception  (op1=0010, d=0, op2=00) → 0x0400
 def BRK : S1C33InstC0<0b0010, 0, 0b00, (outs), (ins), "brk", []> {
   let hasSideEffects = 1;
+  let SchedRW = [WriteSys];
 }
 
 // retd — Return from debug  (op1=0010, d=0, op2=01) → 0x0440
@@ -265,6 +269,7 @@ def RETD : S1C33InstC0<0b0010, 0, 0b01, (outs), (ins), "retd", []> {
   let isBarrier    = 1;
   let Defs         = [SP];
   let Uses         = [SP];
+  let SchedRW      = [WriteRet];
 }
 
 // reti — Return from trap handler  (op1=0010, d=0, op2=11) → 0x04C0
@@ -277,6 +282,7 @@ def RETI : S1C33InstC0<0b0010, 0, 0b11, (outs), (ins), "reti",
   let isBarrier    = 1;
   let Defs         = [SP, PSR];
   let Uses         = [SP];
+  let SchedRW      = [WriteRet];
 }
 
 // ret — Return from subroutine  (op1=0011, d=0, op2=01) → 0x0640
@@ -288,6 +294,7 @@ def RET : S1C33InstC0<0b0011, 0, 0b01, (outs), (ins), "ret",
   let isBarrier    = 1;
   let Defs         = [SP];
   let Uses         = [SP];
+  let SchedRW      = [WriteRet];
 }
 
 // ret.d — Delayed return from subroutine  (op1=0011, d=1, op2=01) → 0x0660
@@ -301,6 +308,7 @@ def RET_D : S1C33InstC0<0b0011, 1, 0b01, (outs), (ins), "ret.d", []> {
   let hasDelaySlot  = 1;
   let Defs          = [SP];
   let Uses          = [SP];
+  let SchedRW       = [WriteRet];
 }
 
 // call.d %rb — Delayed indirect call  (op1=0011, d=1, op2=00) → 0x0650|rb
@@ -313,6 +321,7 @@ def CALL_r_D : S1C33InstC0Reg<0b0011, 1, 0b00,
   let hasSideEffects = 1;
   let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses           = [SP];
+  let SchedRW        = [WriteCall];
 }
 
 //===----------------------------------------------------------------------===//
@@ -329,6 +338,7 @@ def PUSHN : S1C33InstC0Reg<0b0001, 0, 0b00,
   let mayStore       = 1;
   let Defs           = [SP];
   let Uses           = [SP];
+  let SchedRW        = [WritePushPop];
 }
 
 // popn %rb — Pop Rb–R0  (op1=0001, d=0, op2=01) → 0x0240|rb
@@ -338,6 +348,7 @@ def POPN : S1C33InstC0Reg<0b0001, 0, 0b01,
   let mayLoad        = 1;
   let Defs           = [SP];
   let Uses           = [SP];
+  let SchedRW        = [WritePushPop];
 }
 
 // call %rb — Subroutine call via register  (op1=0011, d=0, op2=00) → 0x0600|rb
@@ -348,6 +359,7 @@ def CALL_r : S1C33InstC0Reg<0b0011, 0, 0b00,
   let hasSideEffects = 1;
   let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses           = [SP];
+  let SchedRW        = [WriteCall];
 }
 
 // jp %rb — Unconditional jump via register  (op1=0011, d=0, op2=10) → 0x0680|rb
@@ -359,6 +371,7 @@ def JP_r : S1C33InstC0Reg<0b0011, 0, 0b10,
   let isBarrier        = 1;
   let isBranch         = 1;
   let isIndirectBranch = 1;
+  let SchedRW          = [WriteJmp];
 }
 
 //===----------------------------------------------------------------------===//
@@ -375,6 +388,7 @@ def JP_i : S1C33InstC0Rel<0b1111, 0,
   let isTerminator = 1;
   let isBarrier    = 1;
   let isBranch     = 1;
+  let SchedRW      = [WriteJmp];
 }
 
 // call sign8 — PC-relative subroutine call  (op1=1110, d=0) → 0x1C00|sign8
@@ -384,6 +398,7 @@ def CALL_i : S1C33InstC0Rel<0b1110, 0,
   let hasSideEffects = 1;
   let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses           = [SP];
+  let SchedRW        = [WriteCall];
 }
 
 // call.d sign8 — Delayed PC-relative subroutine call  (op1=1110, d=1).
@@ -394,6 +409,7 @@ def CALL_D_i : S1C33InstC0Rel<0b1110, 1,
   let hasSideEffects = 1;
   let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses           = [SP];
+  let SchedRW        = [WriteCall];
 }
 
 // CALL_sym — direct call to a named symbol.
@@ -408,6 +424,7 @@ def CALL_sym : S1C33InstC0Rel<0b1110, 0,
   // Clobbers: PSR flags, caller-saved R4–R7 and return-value regs R10/R11.
   let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
+  let SchedRW = [WriteCall];
 }
 
 // Delayed direct call to a named symbol.
@@ -419,6 +436,7 @@ def CALL_D_sym : S1C33InstC0Rel<0b1110, 1,
   let hasSideEffects = 1;
   let Defs           = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses           = [SP];
+  let SchedRW        = [WriteCall];
 }
 
 // Patterns: S1C33Call → CALL_sym (direct) or CALL_r (indirect).
@@ -427,7 +445,7 @@ def : Pat<(S1C33Call texternalsym:$target), (CALL_sym texternalsym:$target)>;
 def : Pat<(S1C33Call GR32:$target),         (CALL_r   GR32:$target)>;
 
 // Conditional branches — all update PSR (read) / isBranch.
-let isBranch = 1, isTerminator = 1, Uses = [PSR] in {
+let isBranch = 1, isTerminator = 1, Uses = [PSR], SchedRW = [WriteJmpCond] in {
   // jrgt sign8  (op1=0100) — !Z & !(N^V)
   def JRGT  : S1C33InstC0Rel<0b0100, 0, (outs), (ins simm8:$imm8), "jrgt\t$imm8", []>;
   // jrge sign8  (op1=0101) — !(N^V)
@@ -454,7 +472,8 @@ let isBranch = 1, isTerminator = 1, Uses = [PSR] in {
 // The delay slot instruction executes before the branch is taken.
 // Emitted by pp33/hand-written assembly; not generated by the backend directly.
 // NOTE: jp.d %rb is FORBIDDEN (hardware DMA bug) but jp.d sign8 is fine.
-let isBranch = 1, isTerminator = 1, Uses = [PSR], hasDelaySlot = 1 in {
+let isBranch = 1, isTerminator = 1, Uses = [PSR], hasDelaySlot = 1,
+    SchedRW = [WriteJmpCond] in {
   def JRGT_D  : S1C33InstC0Rel<0b0100, 1, (outs), (ins simm8:$imm8), "jrgt.d\t$imm8", []>;
   def JRGE_D  : S1C33InstC0Rel<0b0101, 1, (outs), (ins simm8:$imm8), "jrge.d\t$imm8", []>;
   def JRLT_D  : S1C33InstC0Rel<0b0110, 1, (outs), (ins simm8:$imm8), "jrlt.d\t$imm8", []>;
@@ -470,6 +489,7 @@ let isBranch = 1, isTerminator = 1, Uses = [PSR], hasDelaySlot = 1 in {
 // Delayed unconditional branch (jp.d sign8 — safe variant; jp.d %rb is forbidden)
 def JP_D_i : S1C33InstC0Rel<0b1111, 1, (outs), (ins simm8:$imm8), "jp.d\t$imm8", []> {
   let isTerminator = 1; let isBarrier = 1; let isBranch = 1; let hasDelaySlot = 1;
+  let SchedRW = [WriteJmp];
 }
 
 // Patterns: S1C33BrCC(dest, S1C33CC) → appropriate conditional jump.
@@ -488,7 +508,7 @@ def : Pat<(S1C33BrCC bb:$dst, (i32 9)), (JRUGE bb:$dst)>;
 // 4-byte relaxed forms: ext + branch/call (for targets beyond sign8 range).
 // Generated by S1C33AsmBackend::relaxInstruction(); not emitted by initial codegen.
 // encodeInstruction() emits: ext word (0xC000|imm13) + branch word (base|sign8).
-let isBranch = 1, isTerminator = 1, Uses = [PSR] in {
+let isBranch = 1, isTerminator = 1, Uses = [PSR], SchedRW = [WriteJmpCond] in {
   def JRGT_EXT1  : S1C33PseudoExt1<(outs), (ins simm8:$imm8), "jrgt\t$imm8", []>;
   def JRGE_EXT1  : S1C33PseudoExt1<(outs), (ins simm8:$imm8), "jrge\t$imm8", []>;
   def JRLT_EXT1  : S1C33PseudoExt1<(outs), (ins simm8:$imm8), "jrlt\t$imm8", []>;
@@ -502,32 +522,38 @@ let isBranch = 1, isTerminator = 1, Uses = [PSR] in {
 }
 def JP_EXT1 : S1C33PseudoExt1<(outs), (ins simm8:$imm8), "jp\t$imm8", []> {
   let isBranch = 1; let isTerminator = 1; let isBarrier = 1;
+  let SchedRW = [WriteJmp];
 }
 // Delayed unconditional branch, long-range relaxed form (ext + jp.d imm8).
 def JP_D_EXT1 : S1C33PseudoExt1<(outs), (ins simm8:$imm8), "jp.d\t$imm8", []> {
   let isBranch = 1; let isTerminator = 1; let isBarrier = 1; let hasDelaySlot = 1;
+  let SchedRW = [WriteJmp];
 }
 def CALL_EXT1 : S1C33PseudoExt1<(outs), (ins i32imm:$imm8), "call\t$imm8", []> {
   let isCall = 1;
   let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
+  let SchedRW = [WriteCall];
 }
 def CALL_D_EXT1 : S1C33PseudoExt1<(outs), (ins i32imm:$imm8), "call.d\t$imm8", []> {
   let isCall = 1;
   let hasDelaySlot = 1;
   let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
+  let SchedRW = [WriteCall];
 }
 def CALL_EXT2 : S1C33PseudoAddrN<6, (outs), (ins i32imm:$imm8), "call\t$imm8", []> {
   let isCall = 1;
   let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
+  let SchedRW = [WriteCall];
 }
 def CALL_D_EXT2 : S1C33PseudoAddrN<6, (outs), (ins i32imm:$imm8), "call.d\t$imm8", []> {
   let isCall = 1;
   let hasDelaySlot = 1;
   let Defs = [SP, PSR, R4, R5, R6, R7, R10, R11];
   let Uses = [SP];
+  let SchedRW = [WriteCall];
 }
 
 //===----------------------------------------------------------------------===//
@@ -542,7 +568,7 @@ def CALL_D_EXT2 : S1C33PseudoAddrN<6, (outs), (ins i32imm:$imm8), "call.d\t$imm8
 //===----------------------------------------------------------------------===//
 
 // ld.w %rd, imm6 (immediate load) clobbers PSR N/Z flags.
-let Defs = [PSR] in {
+let Defs = [PSR], SchedRW = [WriteALU] in {
 def LDW_SYM_EXT0 : S1C33PseudoAddrN<2, (outs GR32:$rd), (ins i32imm:$sym),
     "ld.w\t$rd, $sym", []>;
 def LDW_SYM_EXT1 : S1C33PseudoAddrN<4, (outs GR32:$rd), (ins i32imm:$sym),
@@ -599,6 +625,7 @@ def INT : S1C33InstC0Imm2<0b0010, 0, 0b10,
   let isBarrier     = 1;
   let Defs          = [SP];
   let Uses          = [SP, PSR];
+  let SchedRW       = [WriteSys];
 }
 
 //===----------------------------------------------------------------------===//
@@ -1210,7 +1237,8 @@ let hasSideEffects = 0, SchedRW = [WriteALU] in {
 // op1 values confirmed by user 2026-03-24.
 //===----------------------------------------------------------------------===//
 
-let hasSideEffects = 1, Defs = [PSR, ALR, AHR], Uses = [ALR, AHR] in {
+let hasSideEffects = 1, Defs = [PSR, ALR, AHR], Uses = [ALR, AHR],
+    SchedRW = [WriteDivStep] in {
   // div0s %rs  setup signed divide (op1=010, op2=11); reads ALR (dividend)
   def DIV0S : S1C33InstC4Reg2<0b010, 0b11,
       (outs), (ins GR32:$rs),
@@ -1257,6 +1285,7 @@ let hasSideEffects = 1, Defs = [PSR, ALR, AHR], Uses = [ALR, AHR] in {
 
 def EXT : S1C33InstExt {
   let hasSideEffects = 1;
+  let SchedRW = [WriteALU];
 }
 
 //===----------------------------------------------------------------------===//
@@ -1267,11 +1296,13 @@ def EXT : S1C33InstExt {
 // Expanded by eliminateFrameIndex to: ld.w %rd, %sp; (add %rd, offset).
 // Used when a frame slot address must appear as a data value (e.g. sret pointer).
 def ADJFI : S1C33Pseudo<(outs GR32:$dst), (ins i32imm:$fi),
-    "# ADJFI $dst, $fi", []>;
+    "# ADJFI $dst, $fi", []> {
+  let SchedRW = [WriteALU];
+}
 
 // ADJCALLSTACKDOWN / ADJCALLSTACKUP — call frame setup/destroy markers.
 // Expanded to sub/add %sp by eliminateCallFramePseudoInstr.
-let Defs = [SP], Uses = [SP] in {
+let Defs = [SP], Uses = [SP], SchedRW = [WriteALU] in {
   def ADJCALLSTACKDOWN : S1C33Pseudo<(outs), (ins i32imm:$amt, i32imm:$amt2),
       "# ADJCALLSTACKDOWN $amt, $amt2",
       [(callseq_start timm:$amt, timm:$amt2)]>;
@@ -1300,6 +1331,7 @@ def MOV_ri19 : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$imm),
   let mayLoad = 0;
   let mayStore = 0;
   let Defs = [PSR];
+  let SchedRW = [WriteALU];
 }
 
 // MOV_ri32 — load any 32-bit immediate into a register.
@@ -1318,13 +1350,14 @@ def MOV_ri32 : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$imm32),
   // N/Z flags.  Without this, the scheduler can place MOV_ri32 between
   // a compare and a conditional branch, silently clobbering PSR.
   let Defs = [PSR];
+  let SchedRW = [WriteALU];
 }
 
 // ALU_ri32 pseudos — 2-address immediate ALU for constants beyond imm6 range.
 // Expanded by expandPostRAPseudo to ext(s) + real ALU_ri instruction.
 // TableGen selects these when the more-specific AND_ri/OR_ri/XOR_ri/SUB_ri
 // patterns (constrained to immSExt6/immZExt6) do not match.
-let Defs = [PSR], Constraints = "$rd = $rs" in {
+let Defs = [PSR], Constraints = "$rd = $rs", SchedRW = [WriteALU] in {
   def AND_ri32 : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs, i32imm:$imm32),
       "# AND_ri32 $rd, $imm32",
       [(set GR32:$rd, (and GR32:$rs, imm:$imm32))]>;
@@ -1346,7 +1379,9 @@ let Defs = [PSR], Constraints = "$rd = $rs" in {
 let Defs = [PSR] in
 def CMP_ri32 : S1C33Pseudo<(outs), (ins GR32:$rd, i32imm:$imm32),
     "# CMP_ri32 $rd, $imm32",
-    [(S1C33CmpCC GR32:$rd, imm:$imm32)]>;
+    [(S1C33CmpCC GR32:$rd, imm:$imm32)]> {
+  let SchedRW = [WriteALU];
+}
 
 // Decrement idiom: (add %rs, -N) where 1 ≤ N ≤ 63 → sub %rd, N
 // Handles the common case where the DAGCombiner leaves (add x, -1) instead of (sub x, 1).
@@ -1378,6 +1413,7 @@ def SELECT : S1C33Pseudo<
                                     GR32:$trueval, GR32:$falseval,
                                     imm:$cc))]> {
   let usesCustomInserter = 1;
+  let SchedRW = [WriteALU];
 }
 
 //===----------------------------------------------------------------------===//
@@ -1386,7 +1422,8 @@ def SELECT : S1C33Pseudo<
 // register-register forms).  For variable shifts the amount may exceed 8,
 // so we expand into a loop that shifts by 8 at a time.
 //===----------------------------------------------------------------------===//
-let usesCustomInserter = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+let usesCustomInserter = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0,
+    SchedRW = [WriteALU] in {
   def VSRL : S1C33Pseudo<(outs GR32:$dst), (ins GR32:$val, GR32:$amt),
       "# VSRL $dst, $val, $amt",
       [(set GR32:$dst, (srl GR32:$val, GR32:$amt))]>;
@@ -1475,7 +1512,7 @@ def : Pat<(extloadi16 (add GR32:$rb, immZExt13:$off)), (LDUH_ri_off GR32:$rb, (I
 
 // ld.w %sp, %rs — write GPR to SP
 // Encoding: 0xA000|(rs<<4)|1
-let hasSideEffects = 1, Defs = [SP] in
+let hasSideEffects = 1, Defs = [SP], SchedRW = [WriteSpecMove] in
 def STW_to_SP : S1C33InstC5Reg2<0b000, 0b00,
     (outs), (ins GR32:$rs),
     "ld.w\t%sp, $rs", []> {
@@ -1484,7 +1521,7 @@ def STW_to_SP : S1C33InstC5Reg2<0b000, 0b00,
 
 // ld.w %psr, %rs — write GPR to PSR (flags register)
 // Encoding: 0xA000|(rs<<4)|0
-let hasSideEffects = 1, Defs = [PSR] in
+let hasSideEffects = 1, Defs = [PSR], SchedRW = [WriteSpecMove] in
 def STW_to_PSR : S1C33InstC5Reg2<0b000, 0b00,
     (outs), (ins GR32:$rs),
     "ld.w\t%psr, $rs", []> {
@@ -1493,7 +1530,7 @@ def STW_to_PSR : S1C33InstC5Reg2<0b000, 0b00,
 
 // ld.w %alr, %rs — write GPR to ALR (accumulator low)
 // Encoding: 0xA000|(rs<<4)|2
-let hasSideEffects = 1, Defs = [ALR] in
+let hasSideEffects = 1, Defs = [ALR], SchedRW = [WriteSpecMove] in
 def STW_to_ALR : S1C33InstC5Reg2<0b000, 0b00,
     (outs), (ins GR32:$rs),
     "ld.w\t%alr, $rs", []> {
@@ -1502,7 +1539,7 @@ def STW_to_ALR : S1C33InstC5Reg2<0b000, 0b00,
 
 // ld.w %ahr, %rs — write GPR to AHR (accumulator high)
 // Encoding: 0xA000|(rs<<4)|3
-let hasSideEffects = 1, Defs = [AHR] in
+let hasSideEffects = 1, Defs = [AHR], SchedRW = [WriteSpecMove] in
 def STW_to_AHR : S1C33InstC5Reg2<0b000, 0b00,
     (outs), (ins GR32:$rs),
     "ld.w\t%ahr, $rs", []> {
@@ -1513,7 +1550,7 @@ def STW_to_AHR : S1C33InstC5Reg2<0b000, 0b00,
 
 // ld.w %rd, %sp — read SP into GPR
 // Encoding: 0xA400|0x10|rd  (ss=1 in bits[7:4])
-let hasSideEffects = 0, Uses = [SP] in
+let hasSideEffects = 0, Uses = [SP], SchedRW = [WriteSpecMove] in
 def LDW_from_SP : S1C33InstC5Reg2<0b001, 0b00,
     (outs GR32:$rd), (ins),
     "ld.w\t$rd, %sp", []> {
@@ -1522,7 +1559,7 @@ def LDW_from_SP : S1C33InstC5Reg2<0b001, 0b00,
 
 // ld.w %rd, %psr — read PSR into GPR
 // Encoding: 0xA400|0|rd  (ss=0 in bits[7:4])
-let hasSideEffects = 0, Uses = [PSR] in
+let hasSideEffects = 0, Uses = [PSR], SchedRW = [WriteSpecMove] in
 def LDW_from_PSR : S1C33InstC5Reg2<0b001, 0b00,
     (outs GR32:$rd), (ins),
     "ld.w\t$rd, %psr", []> {
@@ -1532,7 +1569,7 @@ def LDW_from_PSR : S1C33InstC5Reg2<0b001, 0b00,
 // ld.w %rd, %alr — read ALR (multiply/divide low result) into GPR
 // Class 5: op1=001, op2=00, ss=2 (ALR) in bits[7:4], rd in bits[3:0]
 // Encoding: 0xA420 | rd
-let hasSideEffects = 0, Uses = [ALR] in
+let hasSideEffects = 0, Uses = [ALR], SchedRW = [WriteSpecMove] in
 def LDW_from_ALR : S1C33InstC5Reg2<0b001, 0b00,
     (outs GR32:$rd), (ins),
     "ld.w\t$rd, %alr", []> {
@@ -1542,7 +1579,7 @@ def LDW_from_ALR : S1C33InstC5Reg2<0b001, 0b00,
 // ld.w %rd, %ahr — read AHR (multiply/divide high result) into GPR
 // Class 5: op1=001, op2=00, ss=3 (AHR) in bits[7:4], rd in bits[3:0]
 // Encoding: 0xA430 | rd
-let hasSideEffects = 0, Uses = [AHR] in
+let hasSideEffects = 0, Uses = [AHR], SchedRW = [WriteSpecMove] in
 def LDW_from_AHR : S1C33InstC5Reg2<0b001, 0b00,
     (outs GR32:$rd), (ins),
     "ld.w\t$rd, %ahr", []> {
@@ -1739,7 +1776,8 @@ def MLTU_W : S1C33InstC5Reg2<0b011, 0b10,
 // register window rooted at %rs, and post-updates that window (%rs..%rs+2).
 // The register window cannot be modeled statically in TableGen, so keep the
 // instruction conservatively side-effecting and memory-reading.
-let Defs = [ALR, AHR], Uses = [ALR, AHR], mayLoad = 1, hasSideEffects = 1 in
+let Defs = [ALR, AHR], Uses = [ALR, AHR], mayLoad = 1, hasSideEffects = 1,
+    SchedRW = [WriteMltW] in
 def MAC : S1C33InstC5Reg2<0b100, 0b10,
     (outs), (ins GR32:$rs),
     "mac\t$rs", []> {
@@ -1754,10 +1792,21 @@ def MAC : S1C33InstC5Reg2<0b100, 0b10,
 // MULHU_r: unsigned high-32     — expanded to mltu.w + ld.w %rd, %ahr
 //===----------------------------------------------------------------------===//
 
+let SchedRW = [WriteMltW] in {
 def MUL_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
     "# MUL_r $rd, $rs1, $rs2",
     [(set GR32:$rd, (mul GR32:$rs1, GR32:$rs2))]>;
 
+def MULHS_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
+    "# MULHS_r $rd, $rs1, $rs2",
+    [(set GR32:$rd, (mulhs GR32:$rs1, GR32:$rs2))]>;
+
+def MULHU_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
+    "# MULHU_r $rd, $rs1, $rs2",
+    [(set GR32:$rd, (mulhu GR32:$rs1, GR32:$rs2))]>;
+}
+
+let SchedRW = [WriteMltH] in {
 // MUL16U_r: 16×16 unsigned multiply (1 clock) — selected when both operands
 // are known to fit in unsigned 16 bits.  Expanded to: mltu.h + ld.w %alr
 def MUL16U_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
@@ -1767,13 +1816,6 @@ def MUL16U_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
 // are known to fit in signed 16 bits.  Expanded to: mlt.h + ld.w %alr
 def MUL16S_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
     "# MUL16S_r $rd, $rs1, $rs2", []>;
-
-def MULHS_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
-    "# MULHS_r $rd, $rs1, $rs2",
-    [(set GR32:$rd, (mulhs GR32:$rs1, GR32:$rs2))]>;
-
-def MULHU_r : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs1, GR32:$rs2),
-    "# MULHU_r $rd, $rs1, $rs2",
-    [(set GR32:$rd, (mulhu GR32:$rs1, GR32:$rs2))]>;
+}
 
 } // let Predicates = [HasHWMul]

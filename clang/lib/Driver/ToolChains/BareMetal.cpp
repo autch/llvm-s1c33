@@ -728,10 +728,15 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       // libs so newlib's malloc / printf / sin / etc. resolve first.  EPSON
       // libs remain as a fallback for any newlib-missing symbol.  After all
       // sample apps verify, the EPSON libs will be removed (Stage B).
+      //
+      // libpceshim sits ahead of -lc to shadow newlib's rand/srand and
+      // __assert_func with tiny single-threaded versions, breaking those
+      // symbols' dependency cascade into malloc and stdio.
       CmdArgs.push_back("-lclang_rt.builtins-s1c33");
       CmdArgs.push_back("--start-group");
       CmdArgs.push_back("-lcxxrt");
       CmdArgs.push_back("-lpceapi");
+      CmdArgs.push_back("-lpceshim");
       CmdArgs.push_back("-lc");
       CmdArgs.push_back("-lm");
       CmdArgs.push_back("-lio");

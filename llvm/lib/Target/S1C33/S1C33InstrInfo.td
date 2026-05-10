@@ -738,7 +738,11 @@ let mayStore = 1, hasSideEffects = 1, SchedRW = [WriteALU] in {
 // Selected from IndexedLoadSDNode by tryIndexedLoad in S1C33ISelDAGToDAG.cpp
 // (no TableGen pattern — LLVM has no post_load PatFrag, so manual selection
 // is the idiomatic approach, mirroring MSP430/PPC/ARM).
-let mayLoad = 1, hasSideEffects = 1, SchedRW = [WriteLdPI] in {
+// Two SchedWrites: WriteLdPI for the loaded value (latency 2 like a normal
+// load), WriteALU for the post-incremented base register (1 cycle).  Both
+// defs must have a corresponding SchedWrite or CompleteModel=1 trips a
+// "DefIdx exceeds machine model writes" assertion in TargetSchedule.
+let mayLoad = 1, hasSideEffects = 1, SchedRW = [WriteLdPI, WriteALU] in {
   // ld.b %rd, [%rb]+   byte post-increment load  (op1=000, op2=01)
   def LDB_ri_pi  : S1C33InstC1Mem<0b000, 0b01,
       (outs GR32:$rd, GR32:$rb_out), (ins GR32:$rb),
@@ -912,7 +916,7 @@ let Defs = [PSR], hasSideEffects = 0, SchedRW = [WriteALU], isCodeGenOnly = 1 in
 // For ADD/SUB: excludes immZExt6 range (handled by 2-operand *_ri).
 // For AND/OR/XOR: excludes immSExt6 range (handled by 2-operand *_ri).
 //===----------------------------------------------------------------------===//
-let Defs = [PSR], AddedComplexity = 5 in {
+let Defs = [PSR], AddedComplexity = 5, SchedRW = [WriteALU] in {
   def ADD_rri : S1C33Pseudo<(outs GR32:$rd), (ins GR32:$rs, i32imm:$imm),
       "# ADD_rri $rd, $rs, $imm",
       [(set GR32:$rd, (add GR32:$rs, immZExt26Over63:$imm))]>;

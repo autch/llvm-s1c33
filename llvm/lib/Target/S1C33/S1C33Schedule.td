@@ -68,7 +68,11 @@ def ReadAfterLd : SchedRead;  // Read consuming a load result
 
 def S1C33Model : SchedMachineModel {
   let MicroOpBufferSize = 0;   // In-order processor, no reorder buffer
-  let CompleteModel = 0;       // Unlisted instructions default to 1 cycle
+  // CompleteModel = 1: TableGen errors on any instruction without a SchedRW.
+  // All real instructions and surviving pseudos carry an explicit SchedRW;
+  // the InstRW block below catches the few remaining pre-RA-eliminated
+  // pseudos that TableGen still wants to see classified.
+  let CompleteModel = 1;
   let LoadLatency = 2;         // Default load latency (load-use penalty)
 }
 
@@ -93,4 +97,9 @@ let SchedModel = S1C33Model in {
   def : WriteRes<WriteSpecMove, []> { let Latency = 1; }
 
   def : ReadAdvance<ReadAfterLd, 0>;
+
+  // Target-independent pseudos that survive into the scheduler but are
+  // expanded or removed before code emission.  RISCVSchedRocket.td uses the
+  // same idiom for COPY.
+  def : InstRW<[WriteALU], (instrs COPY)>;
 }

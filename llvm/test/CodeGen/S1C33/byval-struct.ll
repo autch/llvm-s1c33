@@ -78,3 +78,81 @@ define i32 @recv_mixed(i32 %a, ptr byval(%struct.S8) align 4 %s, i32 %b) {
   %s2 = add i32 %s1, %b
   ret i32 %s2
 }
+
+; --- gcc33 single-element-struct register passing (DESIGN_SPEC §3.5) ----------
+;
+; A "single-element struct" of <= 32 bits is NOT passed on the stack like every
+; other struct — gcc33 passes it in an argument register exactly as its scalar
+; element would be passed.  clang coerces such a struct to an i8/i16/i32 marked
+; `inreg`; the 8- and 16-bit forms carry their value in the HIGH bits of the
+; register (a leftover from gcc33's MIPS big-endian origin).  The `inreg` flag
+; is what tells a coerced struct apart from an ordinary i8/i16 argument — only
+; the former is high-bit-packed.
+
+declare void @take_se16(i16 inreg)
+declare void @take_se8(i8 inreg)
+
+; Callee: a 16-bit single-element struct arrives in the high half of R12 and is
+; shifted down by 16 before use.
+define i32 @recv_se16(i16 inreg %v) {
+; CHECK-LABEL: recv_se16:
+; CHECK: srl %r{{[0-9]+}}, 8
+; CHECK: srl %r{{[0-9]+}}, 8
+  %z = zext i16 %v to i32
+  ret i32 %z
+}
+
+; Callee: an 8-bit single-element struct sits in the top byte — shifted down 24.
+define i32 @recv_se8(i8 inreg %v) {
+; CHECK-LABEL: recv_se8:
+; CHECK: srl %r{{[0-9]+}}, 8
+; CHECK: srl %r{{[0-9]+}}, 8
+; CHECK: srl %r{{[0-9]+}}, 8
+  %z = zext i8 %v to i32
+  ret i32 %z
+}
+
+; Callee: a 32-bit single-element struct needs no repacking — it arrives in the
+; register exactly like a plain i32.  (The body adds 1 only so the function is
+; not a bare "return the argument", which trips an unrelated pre-existing
+; delay-slot/MOV_rr machine-verifier issue.)
+define i32 @recv_se32(i32 inreg %v) {
+; CHECK-LABEL: recv_se32:
+; CHECK-NOT: srl
+; CHECK-NOT: sll
+  %r = add i32 %v, 1
+  ret i32 %r
+}
+
+; An ordinary i16 argument (NO inreg) must NOT be high-bit-packed — it is a
+; plain value in the low bits, not a coerced struct.
+define i32 @recv_plain16(i16 %v) {
+; CHECK-LABEL: recv_plain16:
+; CHECK-NOT: srl %r{{[0-9]+}}, 8
+  %z = zext i16 %v to i32
+  ret i32 %z
+}
+
+; Caller: passing a 16-bit single-element struct shifts the value up into the
+; high half before the call.
+define void @pass_se16(i32 %x) {
+; CHECK-LABEL: pass_se16:
+; CHECK: sll %r12, 8
+; CHECK: sll %r12, 8
+; CHECK: call take_se16
+  %t = trunc i32 %x to i16
+  call void @take_se16(i16 inreg %t)
+  ret void
+}
+
+; Caller: an 8-bit single-element struct is shifted up by 24.
+define void @pass_se8(i32 %x) {
+; CHECK-LABEL: pass_se8:
+; CHECK: sll %r12, 8
+; CHECK: sll %r12, 8
+; CHECK: sll %r12, 8
+; CHECK: call take_se8
+  %t = trunc i32 %x to i8
+  call void @take_se8(i8 inreg %t)
+  ret void
+}

@@ -438,12 +438,13 @@ SDValue S1C33TargetLowering::LowerFormalArguments(
   // Scalar arguments — each CCValAssign's ValNo indexes into ScalarIns.
   for (const CCValAssign &VA : ArgLocs) {
     unsigned InsI = ScalarInsIdx[VA.getValNo()];
+    SDValue ArgVal;
     if (VA.isRegLoc()) {
       // Argument passed in a register — create a virtual register for it.
       const TargetRegisterClass *RC = &S1C33::GR32RegClass;
       Register VReg = RegInfo.createVirtualRegister(RC);
       RegInfo.addLiveIn(VA.getLocReg(), VReg);
-      InVals[InsI] = DAG.getCopyFromReg(Chain, DL, VReg, MVT::i32);
+      ArgVal = DAG.getCopyFromReg(Chain, DL, VReg, MVT::i32);
     } else {
       // Argument on the stack.  Create a fixed frame object so that
       // eliminateFrameIndex can compute the correct SP-relative offset after
@@ -453,9 +454,25 @@ SDValue S1C33TargetLowering::LowerFormalArguments(
           VA.getLocVT().getStoreSize(), VA.getLocMemOffset(),
           /*IsImmutable=*/true);
       SDValue FIPtr = DAG.getFrameIndex(FI, MVT::i32);
-      InVals[InsI] = DAG.getLoad(VA.getValVT(), DL, Chain, FIPtr,
-                                 MachinePointerInfo::getFixedStack(MF, FI));
+      ArgVal = DAG.getLoad(VA.getValVT(), DL, Chain, FIPtr,
+                           MachinePointerInfo::getFixedStack(MF, FI));
     }
+
+    // gcc33 quirk: an 8- or 16-bit single-element struct passed by value
+    // arrives with its data in the HIGH bits of the i32 register/slot (see
+    // the matching shift in LowerCall and DESIGN_SPEC §3.5).  Shift it back
+    // down so the rest of ISel sees the value in the low bits.  The coerced
+    // argument is recognised by the `inreg` flag clang attaches to it.
+    EVT ArgVT = Ins[InsI].ArgVT;
+    if (Ins[InsI].Flags.isInReg() &&
+        (ArgVT == MVT::i8 || ArgVT == MVT::i16) &&
+        ArgVal.getValueType() == MVT::i32) {
+      unsigned ShAmt = 32 - ArgVT.getSizeInBits();
+      ArgVal = DAG.getNode(ISD::SRL, DL, MVT::i32, ArgVal,
+                           DAG.getConstant(ShAmt, DL, MVT::i32));
+    }
+
+    InVals[InsI] = ArgVal;
   }
 
   // Byval struct arguments — passed entirely on the stack, immediately after
@@ -663,6 +680,20 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
       int FI = cast<FrameIndexSDNode>(Arg)->getIndex();
       SDValue TFI = DAG.getTargetFrameIndex(FI, MVT::i32);
       Arg = SDValue(DAG.getMachineNode(S1C33::ADJFI, DL, MVT::i32, TFI), 0);
+    }
+
+    // gcc33 quirk: an 8- or 16-bit single-element struct passed by value is
+    // coerced by clang to an i8/i16 argument marked `inreg` (the `inreg` flag
+    // distinguishes it from an ordinary i8/i16 argument).  gcc33 places such a
+    // value in the HIGH bits of the argument register/slot.  Shift the
+    // (already i32-promoted) value up to match.  See DESIGN_SPEC §3.5.
+    EVT ArgVT = ScalarOuts[i].ArgVT;
+    if (ScalarOuts[i].Flags.isInReg() &&
+        (ArgVT == MVT::i8 || ArgVT == MVT::i16) &&
+        Arg.getValueType() == MVT::i32) {
+      unsigned ShAmt = 32 - ArgVT.getSizeInBits();
+      Arg = DAG.getNode(ISD::SHL, DL, MVT::i32, Arg,
+                        DAG.getConstant(ShAmt, DL, MVT::i32));
     }
 
     if (VA.isRegLoc()) {

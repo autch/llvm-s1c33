@@ -111,6 +111,27 @@ static bool matchSPPlusConstAddr(SDValue Addr, int64_t &ByteOffOut) {
   return false;
 }
 
+// An SP-relative class-2 memory instruction (*_sp) encodes its address as an
+// SP-relative immediate, so it only works while its address operand is a
+// (Target)FrameIndex.  If that FrameIndex turns out to need a real register
+// (it is also used as a value, e.g. by an ADD from a struct GEP), the *_sp
+// instruction must switch to the register-indirect (*_ri) form, which takes
+// the materialised address in a GR32.  Returns 0 for opcodes that are not
+// *_sp and therefore need no fixup.
+static unsigned spToRiOpcode(unsigned SpOpc) {
+  switch (SpOpc) {
+  case S1C33::LDW_sp:  return S1C33::LDW_ri;
+  case S1C33::LDB_sp:  return S1C33::LDB_ri;
+  case S1C33::LDUB_sp: return S1C33::LDUB_ri;
+  case S1C33::LDH_sp:  return S1C33::LDH_ri;
+  case S1C33::LDUH_sp: return S1C33::LDUH_ri;
+  case S1C33::STW_sp:  return S1C33::STW_ri;
+  case S1C33::STB_sp:  return S1C33::STB_ri;
+  case S1C33::STH_sp:  return S1C33::STH_ri;
+  default:             return 0;
+  }
+}
+
 void S1C33DAGToDAGISel::Select(SDNode *Node) {
   if (Node->isMachineOpcode()) {
     Node->setNodeId(-1);
@@ -156,6 +177,13 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
     // base pointer are safe; everything else (CopyToReg, ADD, SELECT, ...) needs
     // a VR.
     bool NeedsVR = false;
+    // Already-selected *_sp memory instructions that hold this node as a
+    // frame-index address operand.  These are "safe" only while the node
+    // stays a (Target)FrameIndex; if NeedsVR forces an ADJFI register below,
+    // they must be switched to their *_ri register-indirect form.
+    SmallVector<SDNode *, 4> SpUsers;
+    // Iterate ALL uses (no early break): NeedsVR must reflect every use, and
+    // SpUsers must collect every *_sp user regardless of iteration order.
     for (SDUse &Use : Node->uses()) {
       SDNode *User = Use.getUser();
       if (User->isMachineOpcode()) {
@@ -169,10 +197,15 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
         const TargetInstrInfo *TII =
             CurDAG->getSubtarget().getInstrInfo();
         const MCInstrDesc &Desc = TII->get(MachOpc);
-        if ((Desc.mayLoad() || Desc.mayStore()) && Use.getOperandNo() == 0)
+        if ((Desc.mayLoad() || Desc.mayStore()) && Use.getOperandNo() == 0) {
+          // A *_sp form cannot encode a register address.  Record it so it
+          // can be rewritten to *_ri if this node ends up needing an ADJFI.
+          if (spToRiOpcode(MachOpc))
+            SpUsers.push_back(User);
           continue;
+        }
         NeedsVR = true;
-        break;
+        continue;
       }
       // Un-morphed ISD node: safe only for load/store address uses.
       unsigned UseOpc = User->getOpcode();
@@ -181,19 +214,31 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
         Addr = cast<LoadSDNode>(User)->getBasePtr();
       else if (UseOpc == ISD::STORE)
         Addr = cast<StoreSDNode>(User)->getBasePtr();
-      if (Addr.getNode() != Node) {
+      if (Addr.getNode() != Node)
         NeedsVR = true;
-        break;
-      }
     }
 
     if (!NeedsVR) {
       ReplaceNode(Node, TFI.getNode());
     } else {
       // Value use (e.g. CopyToReg, ADD): produce a proper VR via ADJFI.
-      // load/store users of this same node will get LDW_ri(ADJFI) instead of
-      // LDW_sp, which is correct though slightly less compact.
       SDNode *Adj = CurDAG->getMachineNode(S1C33::ADJFI, DL, MVT::i32, TFI);
+      // Any *_sp memory instruction already selected for this node holds the
+      // FrameIndex as an SP-relative-immediate operand and cannot encode the
+      // ADJFI register — it would silently degrade to [%sp+0] (the wrong
+      // slot).  Rebuild each as its *_ri register-indirect equivalent, which
+      // takes the address in a GR32; the operand layout is identical (address
+      // at operand 0), so only operand 0 changes (FrameIndex → ADJFI).
+      for (SDNode *U : SpUsers) {
+        unsigned RiOpc = spToRiOpcode(U->getMachineOpcode());
+        SmallVector<SDValue, 4> Ops(U->op_begin(), U->op_end());
+        Ops[0] = SDValue(Adj, 0);
+        SDNode *NewU =
+            CurDAG->getMachineNode(RiOpc, SDLoc(U), U->getVTList(), Ops);
+        CurDAG->setNodeMemRefs(cast<MachineSDNode>(NewU),
+                               cast<MachineSDNode>(U)->memoperands());
+        ReplaceNode(U, NewU);
+      }
       ReplaceNode(Node, Adj);
     }
     return;

@@ -153,3 +153,42 @@ define void @pass_se8(i32 %x) {
   call void @take_se8(i8 inreg %t)
   ret void
 }
+
+; --- odemaru PDW_DrawBmp alignment-exception regression ----------------------
+;
+; A large byval struct whose field 0 is loaded as a bare value AND whose
+; address is also materialised into a register (later fields are reached via
+; GEP, which forces an ADJFI).  The bare `load (frameindex)` for field 0 is
+; first selected as the SP-relative LDW_sp; once the frame index is forced
+; into an ADJFI register, LDW_sp must be rewritten to the register-indirect
+; LDW_ri.  Without that rewrite LDW_sp keeps the register in its SP-immediate
+; slot ("ld.w %r12, [%sp+%r4]"), which the encoder degrades to [%sp+0] —
+; reading an uninitialised stack slot.  In odemaru this made dobj.src an odd
+; pointer and faulted the kernel's halfword read inside pceLCDDrawObject.
+
+%struct.DO2 = type { ptr, [4 x i16], i16, i16, i16, i16, i16, i16, i16, i16,
+                     i8, i8, i8, i8, i8, i8, i8, i8 }
+declare i32 @use_do2(ptr, i16, i16, i32)
+
+define i32 @recv_byval_large(ptr byval(%struct.DO2) align 4 %dobj) {
+; CHECK-LABEL: recv_byval_large:
+; A register in the SP-immediate slot is invalid — field 0 must be read
+; register-indirect once the frame index lives in a register.
+; CHECK-NOT: [%sp+%r
+; CHECK: ld.w %r{{[0-9]+}}, [%r{{[0-9]+}}]
+  %src = load ptr, ptr %dobj
+  %isnull = icmp eq ptr %src, null
+  br i1 %isnull, label %ret0, label %go
+go:
+  %pdx = getelementptr %struct.DO2, ptr %dobj, i32 0, i32 2
+  %dx = load i16, ptr %pdx
+  %pdy = getelementptr %struct.DO2, ptr %dobj, i32 0, i32 3
+  %dy = load i16, ptr %pdy
+  %pparam = getelementptr %struct.DO2, ptr %dobj, i32 0, i32 13
+  %param = load i8, ptr %pparam
+  %param32 = zext i8 %param to i32
+  %r = call i32 @use_do2(ptr %src, i16 %dx, i16 %dy, i32 %param32)
+  ret i32 %r
+ret0:
+  ret i32 0
+}

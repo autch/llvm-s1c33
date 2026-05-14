@@ -382,36 +382,96 @@ SDValue S1C33TargetLowering::LowerFormalArguments(
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
   S1C33MachineFunctionInfo *FuncInfo = MF.getInfo<S1C33MachineFunctionInfo>();
 
-  // gcc33 varargs ABI: all arguments (fixed + variadic) are on the stack.
-  // Use the stack-only CC so that fixed args are also stack-allocated,
-  // making VarArgsFrameIndex trivially point just past the last fixed arg.
+  // Separate byval (struct-by-value) formal arguments from scalar ones.
+  // Per the S5U1C33000C ABI (§6.5.4) struct-by-value arguments are passed
+  // entirely on the stack and do NOT consume argument registers — this
+  // exactly mirrors the caller side in LowerCall.  ScalarInsIdx maps each
+  // entry of ScalarIns back to its index in Ins, so InVals can be filled in
+  // Ins order regardless of how byval and scalar args interleave.
+  SmallVector<ISD::InputArg, 16> ScalarIns;
+  SmallVector<unsigned, 16> ScalarInsIdx;
+  SmallVector<unsigned, 4> ByValInsIdx;
+  for (unsigned i = 0, e = Ins.size(); i != e; ++i) {
+    if (Ins[i].Flags.isByVal()) {
+      ByValInsIdx.push_back(i);
+    } else {
+      ScalarIns.push_back(Ins[i]);
+      ScalarInsIdx.push_back(i);
+    }
+  }
+
+  // gcc33 varargs ABI: every named argument EXCEPT the last is passed per the
+  // normal CC (R12-R15, overflow to stack); the LAST named argument is passed
+  // on the stack so the callee's va_start(ap, lastnamed) — which takes
+  // &lastnamed — finds the variadic arguments contiguously after it.  The
+  // callee's Ins list contains only the named parameters (the '...' produces
+  // no InputArg), so the last named parameter is simply the one whose
+  // original-argument index is NumParams-1.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
-  if (IsVarArg)
-    CCInfo.AnalyzeFormalArguments(Ins, CC_S1C33_VarArg);
-  else
-    CCInfo.AnalyzeFormalArguments(Ins, CC_S1C33);
+  if (IsVarArg) {
+    unsigned NumParams = MF.getFunction().getFunctionType()->getNumParams();
+    unsigned LastNamed = NumParams - 1; // C requires >= 1 named param before '...'
+    // ScalarIns entries are in original-argument order; find the first entry
+    // that belongs to the last named parameter.
+    unsigned Split = 0;
+    while (Split < ScalarIns.size() &&
+           ScalarIns[Split].OrigArgIndex < LastNamed)
+      ++Split;
+    SmallVector<ISD::InputArg, 8> RegPart(ScalarIns.begin(),
+                                          ScalarIns.begin() + Split);
+    CCInfo.AnalyzeFormalArguments(RegPart, CC_S1C33);
+    // The last named parameter (and any further parts of it) go on the
+    // stack, immediately followed by the variadic area.
+    for (unsigned i = Split; i < ScalarIns.size(); ++i) {
+      MVT VT = ScalarIns[i].VT;
+      int64_t Off = CCInfo.AllocateStack(4, Align(4));
+      ArgLocs.push_back(CCValAssign::getMem(i, VT, Off, VT, CCValAssign::Full));
+    }
+  } else {
+    CCInfo.AnalyzeFormalArguments(ScalarIns, CC_S1C33);
+  }
 
+  // InVals must be returned in Ins order; fill one slot per Ins entry.
+  InVals.resize(Ins.size());
+
+  // Scalar arguments — each CCValAssign's ValNo indexes into ScalarIns.
   for (const CCValAssign &VA : ArgLocs) {
+    unsigned InsI = ScalarInsIdx[VA.getValNo()];
     if (VA.isRegLoc()) {
       // Argument passed in a register — create a virtual register for it.
       const TargetRegisterClass *RC = &S1C33::GR32RegClass;
       Register VReg = RegInfo.createVirtualRegister(RC);
       RegInfo.addLiveIn(VA.getLocReg(), VReg);
-      SDValue ArgVal = DAG.getCopyFromReg(Chain, DL, VReg, MVT::i32);
-      InVals.push_back(ArgVal);
+      InVals[InsI] = DAG.getCopyFromReg(Chain, DL, VReg, MVT::i32);
     } else {
       // Argument on the stack.  Create a fixed frame object so that
       // eliminateFrameIndex can compute the correct SP-relative offset after
       // the prologue (accounting for the return address + callee-saved area).
       assert(VA.isMemLoc());
       int FI = MF.getFrameInfo().CreateFixedObject(
-          VA.getLocVT().getStoreSize(), VA.getLocMemOffset(), /*IsImmutable=*/true);
+          VA.getLocVT().getStoreSize(), VA.getLocMemOffset(),
+          /*IsImmutable=*/true);
       SDValue FIPtr = DAG.getFrameIndex(FI, MVT::i32);
-      SDValue Load = DAG.getLoad(VA.getValVT(), DL, Chain, FIPtr,
+      InVals[InsI] = DAG.getLoad(VA.getValVT(), DL, Chain, FIPtr,
                                  MachinePointerInfo::getFixedStack(MF, FI));
-      InVals.push_back(Load);
     }
+  }
+
+  // Byval struct arguments — passed entirely on the stack, immediately after
+  // the scalar CC-assigned area (mirrors ByValBase in LowerCall).  The value
+  // handed to the rest of ISel is a pointer (FrameIndex) into that incoming
+  // stack region; the struct words already live there, so no extra copy is
+  // emitted.  The object is mutable because byval semantics let the callee
+  // modify its private copy.
+  unsigned ByValBase = CCInfo.getStackSize();
+  for (unsigned Idx : ByValInsIdx) {
+    unsigned Size = Ins[Idx].Flags.getByValSize();
+    unsigned AlignedSize = alignTo(Size, 4);
+    int FI = MF.getFrameInfo().CreateFixedObject(AlignedSize, ByValBase,
+                                                 /*IsImmutable=*/false);
+    InVals[Idx] = DAG.getFrameIndex(FI, MVT::i32);
+    ByValBase += AlignedSize;
   }
 
   // For variadic functions, record the stack offset of the first variadic arg.
@@ -543,10 +603,32 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Analyze only non-byval (scalar) outgoing arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CLI.CallConv, CLI.IsVarArg, MF, ArgLocs, *DAG.getContext());
-  if (CLI.IsVarArg)
-    CCInfo.AnalyzeCallOperands(ScalarOuts, CC_S1C33_VarArg);
-  else
+  if (CLI.IsVarArg) {
+    // gcc33 varargs ABI: every named argument EXCEPT the last is passed per
+    // the normal CC (R12-R15, overflow to stack); the LAST named argument and
+    // all variadic arguments are passed on the stack, contiguously, so the
+    // callee's va_start(ap, lastnamed) finds them after &lastnamed.
+    // CLI.NumFixedArgs is the count of named parameters; the last named one
+    // has original-argument index NumFixedArgs-1.
+    unsigned LastNamed = CLI.NumFixedArgs - 1;
+    // ScalarOuts is in original-argument order; find the first entry that
+    // belongs to the last named parameter (or to the variadic tail).
+    unsigned Split = 0;
+    while (Split < ScalarOuts.size() &&
+           ScalarOuts[Split].OrigArgIndex < LastNamed)
+      ++Split;
+    SmallVector<ISD::OutputArg, 8> RegPart(ScalarOuts.begin(),
+                                           ScalarOuts.begin() + Split);
+    CCInfo.AnalyzeCallOperands(RegPart, CC_S1C33);
+    // The last named argument and the whole variadic tail go on the stack.
+    for (unsigned i = Split; i < ScalarOuts.size(); ++i) {
+      MVT VT = ScalarOuts[i].VT;
+      int64_t Off = CCInfo.AllocateStack(4, Align(4));
+      ArgLocs.push_back(CCValAssign::getMem(i, VT, Off, VT, CCValAssign::Full));
+    }
+  } else {
     CCInfo.AnalyzeCallOperands(ScalarOuts, CC_S1C33);
+  }
 
   // Byval structs go on the stack after the CC-assigned area.
   unsigned ByValBase = CCInfo.getStackSize();
@@ -715,8 +797,10 @@ SDValue S1C33TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
 //===----------------------------------------------------------------------===//
 
 // Lower ISD::VASTART — initialize a va_list with the address of the first
-// variadic argument.  gcc33 ABI: all args (including fixed) are on the stack
-// when the callee is variadic, so va_list is just a pointer (char *).
+// variadic argument.  gcc33 ABI: the last named argument and the variadic
+// arguments are laid out contiguously on the stack, so va_list is just a
+// pointer (char *) and VarArgsFrameIndex already points at the first
+// variadic slot (immediately past the last named argument).
 //
 // VASTART(ptr) — store the address of the first variadic arg into *ptr.
 SDValue S1C33TargetLowering::LowerVASTART(SDValue Op,

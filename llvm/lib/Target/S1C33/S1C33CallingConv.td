@@ -34,12 +34,25 @@ def CC_S1C33 : CallingConv<[
   CCAssignToStack<4, 4>
 ]>;
 
-// Stack-only calling convention used when calling variadic functions.
-// gcc33 ABI: when the callee is variadic, ALL arguments (including fixed
-// ones) go to the stack in left-to-right order.  No argument registers used.
-def CC_S1C33_VarArg : CallingConv<[
-  CCAssignToStack<4, 4>
-]>;
+// Variadic calls do NOT have a dedicated CallingConv def.
+//
+// gcc33 ABI: when the callee is variadic, every named argument EXCEPT the
+// last one is passed per the normal CC_S1C33 (R12-R15, overflow to stack);
+// the LAST named argument and all variadic arguments are passed on the
+// stack, contiguously.  This lets the callee's va_start(ap, lastnamed) —
+// which takes &lastnamed — find the variadic arguments immediately after it.
+//
+// This rule cannot be expressed in TableGen because the CC infrastructure
+// processes one argument at a time and has no notion of "the last named
+// parameter".  It is implemented in C++ in S1C33ISelLowering.cpp
+// (LowerCall / LowerFormalArguments), which splits the argument list at the
+// last named parameter and runs CC_S1C33 on the register part.
+//
+// The earlier all-arguments-on-the-stack convention was only accidentally
+// correct for printf, whose sole named argument IS the last one; it broke
+// sprintf/fprintf/etc., whose earlier named arguments (the destination
+// buffer / stream) must stay in registers to match the gcc33-built kernel
+// and SDK library implementations.
 
 // Callee-saved registers: R0–R3 per S5U1C33000C ABI.
 def CSR_S1C33 : CalleeSavedRegs<(add R0, R1, R2, R3)>;

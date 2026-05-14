@@ -1,7 +1,10 @@
 ; RUN: llc -mtriple=s1c33-none-elf -o - %s | FileCheck %s
 ;
 ; Variadic function ABI verification (gcc33 / S5U1C33000C):
-;   Callee: all args (fixed + variadic) on the stack; no arg registers used.
+;   Every named argument EXCEPT the last is passed per the normal CC
+;   (R12-R15, overflow to stack); the LAST named argument and all variadic
+;   arguments are passed on the stack, contiguously, so the callee's
+;   va_start(ap, lastnamed) finds the variadic area right after &lastnamed.
 ;   va_list is a plain i32 pointer to the first variadic argument.
 ;   va_start initialises the pointer to the absolute runtime address (SP+offset).
 ;   va_copy is a simple 4-byte pointer copy.
@@ -43,10 +46,11 @@ define i32 @varargs_callee(i32 %n, ...) {
 }
 
 ;-------------------------------------------------------------------------------
-; Test 2: caller site — when calling a variadic function all args go to stack
+; Test 2: caller site, single named param — all args go to stack
 ;
-; call vprintf(fmt=null, x, y) with CLI.IsVarArg=true.
-; R12–R15 must NOT be used for argument passing; all 3 args go to [SP+N].
+; call vprintf(fmt=null, x, y) with CLI.IsVarArg=true.  vprintf's only named
+; parameter (%fmt) IS the last named one, so it and both varargs go on the
+; stack; R12–R15 must NOT be used for argument passing.
 ;-------------------------------------------------------------------------------
 
 declare i32 @vprintf(ptr %fmt, ...)
@@ -63,6 +67,71 @@ declare i32 @vprintf(ptr %fmt, ...)
 define i32 @call_varargs(i32 %x, i32 %y) {
   %r = call i32 (ptr, ...) @vprintf(ptr null, i32 %x, i32 %y)
   ret i32 %r
+}
+
+;-------------------------------------------------------------------------------
+; Test 2b: caller site, TWO named params — first named arg stays in R12
+;
+; call vsprintf_like(buf, fmt, x) with CLI.IsVarArg=true.  Here %buf is a
+; named parameter that is NOT the last named one, so it must be passed in
+; R12 (normal CC), exactly as the gcc33-built kernel/SDK sprintf expects.
+; Only %fmt (the last named param) and %x (variadic) go on the stack.
+;
+; This is the case the old "all args on the stack" convention got wrong:
+; the gcc33 sprintf reads its destination buffer from R12, so passing %buf
+; on the stack corrupted every sprintf-built string (e.g. game data
+; filenames), which is why large P/ECE apps failed to load resources.
+;-------------------------------------------------------------------------------
+
+declare i32 @vsprintf_like(ptr %buf, ptr %fmt, ...)
+
+; The parameters are deliberately declared in an order that does NOT already
+; place %buf in R12, so the backend must emit a real move into R12.
+; CHECK-LABEL: call_two_named:
+; The first named arg (%buf) is moved into R12; the last named arg (%fmt) and
+; the variadic arg (%x) go on the stack.  The three arg-setup stores may be
+; scheduled in any order, so match them order-independently.
+; CHECK-DAG: ld.w %r12, %r
+; CHECK-DAG: ld.w [%sp+{{[0-9]+}}], %r
+; CHECK-DAG: ld.w [%sp+{{[0-9]+}}], %r
+; CHECK: call vsprintf_like
+define i32 @call_two_named(i32 %x, ptr %fmt, ptr %buf) {
+  %r = call i32 (ptr, ptr, ...) @vsprintf_like(ptr %buf, ptr %fmt, i32 %x)
+  ret i32 %r
+}
+
+;-------------------------------------------------------------------------------
+; Test 2c: variadic callee with TWO named params
+;
+; varargs_callee2(i32 %a, i32 %b, ...): %a (first named) arrives in R12;
+; %b (last named) arrives on the stack at CC offset 0; the first variadic
+; argument follows at CC offset 4.
+;
+; Stack layout (4-byte %va alloca):
+;   [SP+0]  %va alloca
+;   [SP+4]  return address
+;   [SP+8]  %b               (CC offset 0 → 0 + 4 + 4)
+;   [SP+12] first vararg     (CC offset 4 → 4 + 4 + 4)
+;
+; va_start must therefore materialise SP+12.
+;-------------------------------------------------------------------------------
+
+; CHECK-LABEL: varargs_callee2:
+; CHECK: sub %sp, 1
+; va_start materialises the first-vararg address as SP+12.  The scheduler may
+; interleave the %b stack load and the %a register copy between the two halves.
+; CHECK: ld.w [[VA:%r[0-9]+]], %sp
+; CHECK: add [[VA]], 12
+; CHECK: ret
+define i32 @varargs_callee2(i32 %a, i32 %b, ...) {
+  %va = alloca ptr, align 4
+  call void @llvm.va_start(ptr %va)
+  %ap = load ptr, ptr %va
+  %v = load i32, ptr %ap
+  call void @llvm.va_end(ptr %va)
+  %s1 = add i32 %a, %b
+  %s2 = add i32 %s1, %v
+  ret i32 %s2
 }
 
 ;-------------------------------------------------------------------------------

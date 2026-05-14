@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=s1c33-none-elf -o - %s | FileCheck %s
+; RUN: llc -mtriple=s1c33-none-elf -verify-machineinstrs -o - %s | FileCheck %s
 ;
 ; Delay slot filler tests for S1C33.
 ;
@@ -33,7 +33,7 @@ define void @nop_slot() {
 ; diamond, so the pass keeps plain jp / ret instead of delayed forms + nop.
 ; Tested with -O0 to keep the explicit merge block.
 ;-------------------------------------------------------------------------------
-; RUN: llc -mtriple=s1c33-none-elf -O0 -o - %s | FileCheck %s --check-prefix=CHECK-JPD
+; RUN: llc -mtriple=s1c33-none-elf -O0 -verify-machineinstrs -o - %s | FileCheck %s --check-prefix=CHECK-JPD
 ; CHECK-JPD-LABEL: jpd_uncond:
 ; CHECK-JPD:       jrne
 ; CHECK-JPD:       jp

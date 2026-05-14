@@ -113,15 +113,12 @@ define i32 @recv_se8(i8 inreg %v) {
 }
 
 ; Callee: a 32-bit single-element struct needs no repacking — it arrives in the
-; register exactly like a plain i32.  (The body adds 1 only so the function is
-; not a bare "return the argument", which trips an unrelated pre-existing
-; delay-slot/MOV_rr machine-verifier issue.)
+; register exactly like a plain i32.
 define i32 @recv_se32(i32 inreg %v) {
 ; CHECK-LABEL: recv_se32:
 ; CHECK-NOT: srl
 ; CHECK-NOT: sll
-  %r = add i32 %v, 1
-  ret i32 %r
+  ret i32 %v
 }
 
 ; An ordinary i16 argument (NO inreg) must NOT be high-bit-packed — it is a

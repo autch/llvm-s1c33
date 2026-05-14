@@ -326,10 +326,31 @@ void S1C33DelaySlotFiller::fillDelaySlot(
   LLVM_DEBUG(dbgs() << "  Filled delay slot with: " << *std::prev(SlotPos));
 }
 
+// A delayed branch (the bundle header) semantically executes AFTER its delay
+// slot instruction.  When the delay slot defines a register the branch reads —
+// e.g. RET_D reads $r10 (the return value) and the slot is the MOV that
+// produces it — that value is produced *within* the bundle.  Mark such uses on
+// the branch as internal reads: MachineOperand::readsReg() then returns false
+// for them, so the machine verifier no longer flags them as reading an
+// undefined physical register.  (Without this, `int f(int v){return v;}` fails
+// `llc -verify-machineinstrs`, since the MOV that sets $r10 lands in the RET_D
+// delay slot.)
+static void markDelayedBranchInternalReads(MachineInstr &Branch,
+                                           MachineInstr &Slot,
+                                           const TargetRegisterInfo &TRI) {
+  for (MachineOperand &MO : Branch.operands()) {
+    if (!MO.isReg() || !MO.isUse() || !MO.getReg())
+      continue;
+    if (definesRegisterSemantically(Slot, MO.getReg(), TRI))
+      MO.setIsInternalRead();
+  }
+}
+
 bool S1C33DelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
   const S1C33Subtarget &STI = MF.getSubtarget<S1C33Subtarget>();
   const S1C33InstrInfo &TII =
       *static_cast<const S1C33InstrInfo *>(STI.getInstrInfo());
+  const TargetRegisterInfo &TRI = *STI.getRegisterInfo();
 
   bool Changed = false;
 
@@ -345,6 +366,7 @@ bool S1C33DelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
         I->setDesc(TII.get(S1C33::JP_D_i));
         LLVM_DEBUG(dbgs() << "Converting JP_i to JP_D_i in " << MF.getName() << "\n");
         fillDelaySlot(MBB, I, Candidate);
+        markDelayedBranchInternalReads(*I, *std::next(I), TRI);
         Changed = true;
         // Bundle the delayed branch with its delay slot instruction so that
         // MachineBasicBlock::back() returns JP_D_i (a barrier), not the moved
@@ -365,6 +387,7 @@ bool S1C33DelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
         I->setDesc(TII.get(S1C33::RET_D));
         LLVM_DEBUG(dbgs() << "Converting RET to RET_D in " << MF.getName() << "\n");
         fillDelaySlot(MBB, I, Candidate);
+        markDelayedBranchInternalReads(*I, *std::next(I), TRI);
         Changed = true;
         MIBundleBuilder(MBB, I, std::next(I, 2));
         ++I;
@@ -378,6 +401,7 @@ bool S1C33DelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
         I->setDesc(TII.get(S1C33::CALL_r_D));
         LLVM_DEBUG(dbgs() << "Converting CALL_r to CALL_r_D in " << MF.getName() << "\n");
         fillDelaySlot(MBB, I, Candidate);
+        markDelayedBranchInternalReads(*I, *std::next(I), TRI);
         Changed = true;
         MIBundleBuilder(MBB, I, std::next(I, 2));
         ++I;

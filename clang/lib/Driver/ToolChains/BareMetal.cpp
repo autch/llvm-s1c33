@@ -718,16 +718,17 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (Triple.getArch() == llvm::Triple::s1c33) {
-      // P/ECE SDK default libraries in the canonical link order.
+      // P/ECE default libraries in the canonical link order.
       // libclang_rt.builtins-s1c33.a provides compiler-rt builtins (FP, integer
       // division, 64-bit arithmetic) replacing the old libfp.a / libidiv.a.
       // Using --start-group/--end-group to handle circular references between
-      // libraries (e.g. libio calls libstring, liblib calls libmath).
+      // libraries.
       //
-      // Stage A migration (newlib Phase 2): -lc -lm precede the EPSON SDK
-      // libs so newlib's malloc / printf / sin / etc. resolve first.  EPSON
-      // libs remain as a fallback for any newlib-missing symbol.  After all
-      // sample apps verify, the EPSON libs will be removed (Stage B).
+      // newlib Phase 2 Stage B: the gcc33-era EPSON SDK libraries
+      // (-lio -llib -lmath -lstring -lctype) have been dropped now that
+      // sample apps verify that newlib's libc.a / libm.a fully cover their
+      // symbol needs.  The SRF-converted .a files are no longer generated
+      // by tools/crt/Makefile.
       //
       // libpceshim sits ahead of -lc to shadow newlib's rand/srand and
       // __assert_func with tiny single-threaded versions, breaking those
@@ -739,11 +740,6 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-lpceshim");
       CmdArgs.push_back("-lc");
       CmdArgs.push_back("-lm");
-      CmdArgs.push_back("-lio");
-      CmdArgs.push_back("-llib");
-      CmdArgs.push_back("-lmath");
-      CmdArgs.push_back("-lstring");
-      CmdArgs.push_back("-lctype");
       CmdArgs.push_back("--end-group");
     } else {
       CmdArgs.push_back("--start-group");

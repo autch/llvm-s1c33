@@ -4,21 +4,6 @@
 	.text
 
 	.global	__divsf3
-	.global	count1
-	.global	loop1
-	.global	getman2
-	.global	count2
-	.global	loop2
-	.global	cmpcount
-	.global	man2shift
-	.global	divide
-	.global	divloop
-	.global	continue2
-	.global	notunder
-	.global	normal
-	.global	overflow
-	.global	finish
-	.global	end
 
 
 __divsf3:

@@ -4,21 +4,6 @@
 	.text
 
 	.global	__mulsf3
-	.global	getman2
-	.global	flag
-	.global	multi
-	.global	normalize
-	.global	expgtz
-	.global	shftltexp
-	.global	shift
-	.global	rshift
-	.global	denormal
-	.global	lshift
-	.global	L1
-	.global	L2
-	.global	overflow
-	.global	finish
-	.global	end
 
 
 __mulsf3:

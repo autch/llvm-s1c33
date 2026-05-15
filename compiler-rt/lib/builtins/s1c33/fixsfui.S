@@ -4,12 +4,6 @@
 	.text
 
 	.global	__fixunssfsi
-	.global	shift
-	.global	done
-	.global	shftleft
-	.global	finish
-	.global	overflow
-	.global	end
 
 
 __fixunssfsi:

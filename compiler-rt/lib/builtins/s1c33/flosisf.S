@@ -4,11 +4,6 @@
 	.text
 
 	.global	__floatsisf
-	.global	count
-	.global	continue
-	.global	shift
-	.global	done
-	.global	end
 
 
 __floatsisf:

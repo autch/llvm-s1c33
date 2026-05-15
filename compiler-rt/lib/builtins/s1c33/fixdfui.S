@@ -4,14 +4,6 @@
 	.text
 
 	.global	__fixunsdfsi
-	.global	L1
-	.global	L2
-	.global	shftleft
-	.global	L3
-	.global	L4
-	.global	finish
-	.global	overflow
-	.global	end
 
 
 __fixunsdfsi:

@@ -4,8 +4,6 @@
 	.text
 
 	.global	__scan64
-	.global	loop
-	.global	end
 
 
 __scan64:

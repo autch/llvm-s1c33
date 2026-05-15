@@ -5,28 +5,6 @@
 
 	.global	__subdf3
 	.global	__adddf3
-	.global	ex1ltex2
-	.global	continue
-	.global	getman2
-	.global	cmpexp
-	.global	shftm1
-	.global	shift1
-	.global	man2
-	.global	shftm2
-	.global	shift2
-	.global	negation
-	.global	negm1
-	.global	negm2
-	.global	sign
-	.global	addition
-	.global	negative
-	.global	count
-	.global	normalize
-	.global	lshift
-	.global	rshift
-	.global	overflow
-	.global	finish
-	.global	end
 
 
 __subdf3:

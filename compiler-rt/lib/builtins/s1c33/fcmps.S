@@ -4,10 +4,6 @@
 	.text
 
 	.global	__fcmps
-	.global	negexp
-	.global	mancmp
-	.global	negman
-	.global	end
 
 
 __fcmps:

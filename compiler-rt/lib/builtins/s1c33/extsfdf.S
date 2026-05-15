@@ -4,14 +4,6 @@
 	.text
 
 	.global	__extendsfdf2
-	.global	count
-	.global	continue
-	.global	L1
-	.global	L2
-	.global	shftleft
-	.global	expnez
-	.global	finish
-	.global	end
 
 
 __extendsfdf2:

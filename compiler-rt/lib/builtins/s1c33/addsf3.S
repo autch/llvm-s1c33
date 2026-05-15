@@ -5,27 +5,6 @@
 
 	.global	__subsf3
 	.global	__addsf3
-	.global	ex1ltex2
-	.global	continue
-	.global	getman2
-	.global	cmpexp
-	.global	shftm1
-	.global	man2
-	.global	shftm2
-	.global	negation
-	.global	negm1
-	.global	negm2
-	.global	sign
-	.global	addition
-	.global	precount
-	.global	count
-	.global	expchk
-	.global	normalize
-	.global	denormal
-	.global	shftrght
-	.global	overflow
-	.global	finish
-	.global	end
 
 
 __subsf3:

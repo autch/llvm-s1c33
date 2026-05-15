@@ -4,8 +4,6 @@
 	.text
 
 	.global	__fcmpd
-	.global	negcmp
-	.global	end
 
 
 __fcmpd:

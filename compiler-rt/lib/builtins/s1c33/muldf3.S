@@ -4,27 +4,6 @@
 	.text
 
 	.global	__muldf3
-	.global	input2
-	.global	getexp
-	.global	man2
-	.global	tempadd
-	.global	multiply
-	.global	count
-	.global	normalize
-	.global	expgtz
-	.global	shftltexp
-	.global	shift
-	.global	lshft32
-	.global	rshift
-	.global	L1
-	.global	L2
-	.global	underflow
-	.global	doshift
-	.global	lshift
-	.global	overchk
-	.global	overflow
-	.global	finish
-	.global	end
 
 
 __muldf3:

@@ -4,25 +4,6 @@
 	.text
 
 	.global	__divdf3
-	.global	zerochk2
-	.global	getexp
-	.global	count1
-	.global	getman2
-	.global	count2
-	.global	cmpcount
-	.global	man2shift
-	.global	divide
-	.global	loop
-	.global	subtract
-	.global	xshift
-	.global	normalize
-	.global	continue2
-	.global	notunder
-	.global	normal
-	.global	overchk
-	.global	overflow
-	.global	finish
-	.global	end
 
 
 __divdf3:

@@ -4,12 +4,6 @@
 	.text
 
 	.global	__truncdfsf2
-	.global	shift
-	.global	done
-	.global	shftleft
-	.global	normal
-	.global	finish
-	.global	end
 
 
 __truncdfsf2:

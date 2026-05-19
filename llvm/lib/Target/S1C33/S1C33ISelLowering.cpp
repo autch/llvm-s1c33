@@ -985,6 +985,22 @@ S1C33TargetLowering::emitVariableShift(MachineInstr &MI,
   LoopMBB->addSuccessor(LoopMBB);
   LoopMBB->addSuccessor(DoneMBB);
 
+  // Mask the shift count to 0-31.  LLVM's 32-bit-target expansion of i64
+  // SHL/SRL/SRA evaluates both partial-shift paths unconditionally and
+  // selects the right one afterwards; one of those paths is
+  // `hi << (32 - n)` or `hi >> (n - 32)` where the subexpression goes
+  // negative (huge unsigned) on the unused branch.  Hardware shifts on
+  // x86/ARM mask the count, so the bogus value is bounded and the select
+  // discards it.  S1C33 has no such masking — Amt is fed straight into the
+  // shift-by-8 loop below, and a count of e.g. 0xFFFFFFEC iterates ~537M
+  // times before the unsigned compare lets it exit.  Masking here matches
+  // the standard hardware convention and keeps the loop bounded; the outer
+  // i64 select still discards the bogus partial result.
+  Register MaskedAmt = MRI.createVirtualRegister(RC);
+  BuildMI(BB, DL, TII.get(S1C33::AND_ri), MaskedAmt)
+      .addReg(Amt).addImm(31);
+  Amt = MaskedAmt;
+
   // BB: cmp %amt, 8; jrule DoneMBB
   BuildMI(BB, DL, TII.get(S1C33::CMP_ri)).addReg(Amt).addImm(8);
   BuildMI(BB, DL, TII.get(S1C33::JRULE)).addMBB(DoneMBB);

@@ -305,6 +305,17 @@ S1C33DelaySlotFiller::findDelaySlotCandidate(MachineBasicBlock &MBB,
           Safe = false;
           break;
         }
+        // An intervening conditional branch is a control-flow split: when
+        // it is taken, the delay slot we're filling is bypassed entirely,
+        // so its effects do not reach the branch's other successor.  If
+        // the candidate defines anything live on that path, moving it
+        // into the delay slot silently drops the def.  Conservatively
+        // reject any candidate that lives above such a split, instead of
+        // attempting a precise live-in check across MBB boundaries.
+        if (Mid->isBranch()) {
+          Safe = false;
+          break;
+        }
       }
     }
 

@@ -25,15 +25,28 @@ S1C33Subtarget::S1C33Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
                                const TargetOptions &Options,
                                CodeModel::Model CM, CodeGenOptLevel OL)
     : S1C33GenSubtargetInfo(TT, CPU, /*TuneCPU=*/CPU, FS),
-      InstrInfo(initializeSubtargetDependencies(CPU, FS)), FrameLowering(),
+      InstrInfo(initializeSubtargetDependencies(TT, CPU, FS)), FrameLowering(),
       TLInfo(TM, *this) {}
 
-S1C33Subtarget &S1C33Subtarget::initializeSubtargetDependencies(StringRef CPU,
-                                                                StringRef FS) {
+S1C33Subtarget &
+S1C33Subtarget::initializeSubtargetDependencies(const Triple &TT, StringRef CPU,
+                                                StringRef FS) {
   std::string CPUName = std::string(CPU);
   if (CPUName.empty())
     CPUName =
         "s1c33209"; // Default to S1C33209 (P/ECE SoC with hardware multiplier)
+
+  // R8-based absolute global addressing relies on R8 == 0, which only the
+  // P/ECE kernel guarantees.  Default it on for s1c33-*-piece; an explicit
+  // -mattr comes later in the feature string and therefore still overrides
+  // the default in either direction.
+  std::string FullFS;
+  if (TT.isPIECE()) {
+    FullFS = "+r8-abs";
+    if (!FS.empty())
+      (FullFS += ",") += FS;
+    FS = FullFS;
+  }
   ParseSubtargetFeatures(CPUName, CPUName, FS);
   return *this;
 }

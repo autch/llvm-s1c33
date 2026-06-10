@@ -27,7 +27,8 @@ class S1C33Subtarget : public S1C33GenSubtargetInfo {
   bool HasHWMul = false;
 
   // SubtargetFeature: enable R8-based absolute addressing for single-use
-  // globals.  Default true.  Toggle with -mattr=+/-r8-abs.
+  // globals.  Relies on R8 == 0 (a P/ECE kernel guarantee), so it defaults
+  // to on only for s1c33-*-piece triples.  Toggle with -mattr=+/-r8-abs.
   bool HasR8AbsGlobal = false;
 
   SelectionDAGTargetInfo TSInfo;
@@ -42,7 +43,8 @@ public:
 
   void ParseSubtargetFeatures(StringRef CPU, StringRef TuneCPU, StringRef FS);
 
-  S1C33Subtarget &initializeSubtargetDependencies(StringRef CPU, StringRef FS);
+  S1C33Subtarget &initializeSubtargetDependencies(const Triple &TT,
+                                                  StringRef CPU, StringRef FS);
 
   bool hasHWMul() const { return HasHWMul; }
 

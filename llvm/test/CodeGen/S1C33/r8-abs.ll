@@ -1,14 +1,20 @@
-; RUN: llc -mtriple=s1c33-none-elf -o - %s | FileCheck %s --check-prefixes=CHECK,R8ABS
-; RUN: llc -mtriple=s1c33-none-elf -mattr=-r8-abs -o - %s | FileCheck %s --check-prefixes=CHECK,NO_R8ABS
+; RUN: llc -mtriple=s1c33-none-piece -o - %s | FileCheck %s --check-prefixes=CHECK,R8ABS
+; RUN: llc -mtriple=s1c33-none-piece -mattr=-r8-abs -o - %s | FileCheck %s --check-prefixes=CHECK,NO_R8ABS
+; RUN: llc -mtriple=s1c33-none-elf -o - %s | FileCheck %s --check-prefixes=CHECK,NO_R8ABS
+; RUN: llc -mtriple=s1c33-none-elf -mattr=+r8-abs -o - %s | FileCheck %s --check-prefixes=CHECK,R8ABS
 ;
 ; R8 absolute addressing for global load/store.  When FeatureR8AbsGlobal is
-; on (default), access to a wrapped global address is emitted as
+; on, access to a wrapped global address is emitted as
 ;   ext sym@ah / ext sym@al / ld.* [%r8]     (6 bytes)
 ; taking advantage of R8 being held at 0 by the P/ECE kernel.  With the
 ; feature disabled, the access falls back to the materialize-then-indirect
 ; path:
 ;   ext sym@h / ext sym@m / ld.w %rd, sym@l
 ;   ld.* [%rd], ...                           (8 bytes)
+;
+; R8 == 0 is an OS guarantee, not a CPU property, so the feature defaults to
+; on only for s1c33-*-piece triples; bare-metal s1c33-none-elf must opt in
+; with -mattr=+r8-abs (and set R8 = 0 in its startup code).
 ;
 ; Compatible with gcc33's @ah/@al syntax.  The ELF relocations are
 ; R_S1C33_REL_AH / R_S1C33_REL_AL (the "REL_" prefix is historical — the

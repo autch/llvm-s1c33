@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=s1c33-none-elf -O1 -o - %s | FileCheck %s
+; RUN: llc -mtriple=s1c33-none-piece -O1 -o - %s | FileCheck %s
 ;
 ; LowerGlobalAddress splits nonzero offsets into a separate ADD so that
 ; multiple accesses to the same global (struct field accesses) share a common

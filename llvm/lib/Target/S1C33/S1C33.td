@@ -28,8 +28,10 @@ def HasHWMul : Predicate<"Subtarget->hasHWMul()">,
 // R8-based absolute addressing (`ext sym@ah / ext sym@al / ld.* [%r8]`) for
 // single-use global loads/stores.  Saves 2 bytes per access vs the existing
 // `ext @h / ext @m / ld.w %rd, @l` + `ld.* [%rd]` pattern.  Requires R8 to be
-// held at 0 (P/ECE kernel guarantees this) and the target address to fit in
-// 26 bits.  Default on.  Disable with -mattr=-r8-abs.
+// held at 0 and the target address to fit in 26 bits.  R8 == 0 is a P/ECE
+// kernel guarantee, so the feature defaults to on only for the s1c33-*-piece
+// triple (see S1C33Subtarget::initializeSubtargetDependencies); bare-metal
+// code must set R8 itself before enabling it with -mattr=+r8-abs.
 def FeatureR8AbsGlobal : SubtargetFeature<"r8-abs", "HasR8AbsGlobal", "true",
     "Use R8-relative [%r8] form for single-use absolute globals">;
 
@@ -48,10 +50,13 @@ include "S1C33InstrInfo.td"
 // S1C33 Processors
 //===----------------------------------------------------------------------===//
 
-def : ProcessorModel<"generic", S1C33Model, [FeatureR8AbsGlobal]>;
+// FeatureR8AbsGlobal is intentionally absent from the CPU feature lists: it
+// is an OS property (P/ECE keeps R8 == 0), not a CPU property, and is added
+// by S1C33Subtarget when targeting s1c33-*-piece.
+def : ProcessorModel<"generic", S1C33Model, []>;
 
 // S1C33209: the SoC used in P/ECE, has optional multiplier.
-def : ProcessorModel<"s1c33209", S1C33Model, [FeatureHWMul, FeatureR8AbsGlobal]>;
+def : ProcessorModel<"s1c33209", S1C33Model, [FeatureHWMul]>;
 
 defm : RemapAllTargetPseudoPointerOperands<GR32>;
 

@@ -1,17 +1,32 @@
-
 #ifndef ELF_RELOC
 #error "ELF_RELOC must be defined"
 #endif
 
-ELF_RELOC(R_S1C33_NONE,  0)
-ELF_RELOC(R_S1C33_REL8,  1)
-ELF_RELOC(R_S1C33_32,    2)
-ELF_RELOC(R_S1C33_ABS_H, 3)
-ELF_RELOC(R_S1C33_ABS_M, 4)
-ELF_RELOC(R_S1C33_ABS_L, 5)
-ELF_RELOC(R_S1C33_REL21, 6)
-ELF_RELOC(R_S1C33_REL_H, 7)
-ELF_RELOC(R_S1C33_REL_M, 8)
-ELF_RELOC(R_S1C33_REL_L, 9)
-ELF_RELOC(R_S1C33_REL_AH, 10)
-ELF_RELOC(R_S1C33_REL_AL, 11)
+// S1C33 ELF relocation types.
+//
+// There is no official ELF psABI for the S1C33: Epson's own toolchain
+// (S5U1C33000C, "gcc33") emitted its proprietary SRF object format, not ELF.
+// The relocation types below are defined by this port.  Their semantics
+// (which instruction bits each one patches) mirror the gcc33 SRF relocation
+// kinds one-to-one so that SRF objects can be converted losslessly; the
+// numeric values are this port's own allocation.
+//
+// PC-relative types use the address of the branch/call instruction itself
+// (not the first ext prefix and not the next instruction) as the PC base.
+//
+// R_S1C33_REL_AH/AL carry a historical "REL_" prefix from the SRF kind names
+// but are used by this port as a 26-bit *absolute* address split across two
+// ext prefixes (the ext/ext/ld.* [%r8] global-access pattern).
+
+ELF_RELOC(R_S1C33_NONE,  0)  // No relocation.
+ELF_RELOC(R_S1C33_REL8,  1)  // 8-bit PC-relative: branch/call sign8 field.
+ELF_RELOC(R_S1C33_32,    2)  // 32-bit absolute data word.
+ELF_RELOC(R_S1C33_ABS_H, 3)  // Absolute bits[31:19] -> ext imm13 (high).
+ELF_RELOC(R_S1C33_ABS_M, 4)  // Absolute bits[18:6]  -> ext imm13 (mid).
+ELF_RELOC(R_S1C33_ABS_L, 5)  // Absolute bits[5:0]   -> ld.w/etc. imm6.
+ELF_RELOC(R_S1C33_REL21, 6)  // 21-bit PC-relative: ext+branch/call pair.
+ELF_RELOC(R_S1C33_REL_H, 7)  // PC-rel bits[31:22] -> ext imm13 (<<3).
+ELF_RELOC(R_S1C33_REL_M, 8)  // PC-rel bits[21:9]  -> ext imm13.
+ELF_RELOC(R_S1C33_REL_L, 9)  // PC-rel bits[8:1]   -> branch sign8 field.
+ELF_RELOC(R_S1C33_REL_AH, 10) // Absolute bits[25:13] -> first ext imm13.
+ELF_RELOC(R_S1C33_REL_AL, 11) // Absolute bits[12:0]  -> second ext imm13.

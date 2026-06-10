@@ -161,6 +161,18 @@ TEST(TripleTest, ParsedIDs) {
   EXPECT_EQ(Triple::SCEI, T.getVendor());
   EXPECT_EQ(Triple::PS5, T.getOS());
 
+  T = Triple("s1c33-none-elf");
+  EXPECT_EQ(Triple::s1c33, T.getArch());
+  EXPECT_EQ(Triple::UnknownOS, T.getOS());
+  EXPECT_EQ(Triple::ELF, T.getObjectFormat());
+  EXPECT_FALSE(T.isPIECE());
+
+  T = Triple("s1c33-none-piece");
+  EXPECT_EQ(Triple::s1c33, T.getArch());
+  EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
+  EXPECT_EQ(Triple::PIECE, T.getOS());
+  EXPECT_TRUE(T.isPIECE());
+
   T = Triple("powerpc-ibm-aix");
   EXPECT_EQ(Triple::ppc, T.getArch());
   EXPECT_EQ(Triple::IBM, T.getVendor());

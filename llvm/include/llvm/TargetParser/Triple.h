@@ -253,7 +253,8 @@ public:
     Serenity,
     Vulkan, // Vulkan SPIR-V
     CheriotRTOS,
-    LastOSType = CheriotRTOS
+    PIECE, // Aquaplus P/ECE (S1C33209 handheld)
+    LastOSType = PIECE
   };
   enum EnvironmentType {
     UnknownEnvironment,
@@ -842,6 +843,11 @@ public:
 
   /// Tests whether the target is the PS4 or PS5 platform.
   bool isPS() const { return isPS4() || isPS5(); }
+
+  /// Tests whether the target is the Aquaplus P/ECE platform.
+  bool isPIECE() const {
+    return getArch() == Triple::s1c33 && getOS() == Triple::PIECE;
+  }
 
   /// Tests whether the target is Android
   bool isAndroid() const { return getEnvironment() == Triple::Android; }

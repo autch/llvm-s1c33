@@ -49,6 +49,8 @@ public:
         // fixup_s1c33_abs_m: bits[18:6] of absolute addr → ext_m imm13 field.
         {"fixup_s1c33_abs_m", 0, 13, 0},
         // fixup_s1c33_abs_l: bits[5:0] of absolute addr → ld.w imm6 field.
+        //   TargetOffset is in BITS: the sign6 field sits at bits[9:4] of
+        //   the ld.w instruction word, hence offset 4, width 6.
         {"fixup_s1c33_abs_l", 4, 6, 0},
         // fixup_s1c33_abs_ah: bits[25:13] of 26-bit absolute addr → ext_hi
         // imm13.

@@ -1287,6 +1287,16 @@ let hasSideEffects = 1, Defs = [PSR, ALR, AHR], Uses = [ALR, AHR],
 // Bit field: "imm13".
 //===----------------------------------------------------------------------===//
 
+// hasSideEffects = 1 is deliberate even though ext writes no register:
+// its effect (extending the NEXT instruction's immediate) is invisible to
+// the dependency model, and bare EXT instructions created before the
+// post-RA scheduler (eliminateFrameIndex emits them for large SP-relative
+// offsets) would otherwise carry no edges at all and could be moved away
+// from their target instruction.  The flag makes EXT a scheduling barrier
+// (TargetInstrInfo::isGlobalMemoryObject), which keeps later memory ops
+// ordered after it.  Most EXTs avoid the problem entirely by staying
+// fused inside pseudos until ExpandExtPseudos, which runs after all
+// scheduling; the delay slot filler also special-cases EXT.
 def EXT : S1C33InstExt {
   let hasSideEffects = 1;
   let SchedRW = [WriteALU];
@@ -1318,13 +1328,16 @@ let Defs = [SP], Uses = [SP], SchedRW = [WriteALU] in {
 // MOV_ri19 — load a signed 19-bit immediate that does NOT fit in sign6.
 // Expands to: ext imm13 + ld.w %rd, imm6 (two real instructions).
 //
-// isReMaterializable is set so the allocator may re-create the constant at
-// a use site that would otherwise need a reload from a stack spill.  The
-// flag is only a hint: when both spill and remat are viable the allocator
-// considers the weight of each.  isAsCheapAsAMove is NOT set (unlike
-// MOV_ri6) because two instructions is *not* as cheap as a register copy;
-// leaving it off keeps the allocator from rematerializing aggressively for
-// constants that are better off being spilled once and reloaded N times.
+// isReMaterializable + isAsCheapAsAMove let the allocator re-create the
+// constant at each use instead of spilling it when no callee-saved
+// register is free.  Break-even for a constant used N times: spilling
+// costs 2 (materialize) + 1 (store) + N (reloads) = 3 + N instructions;
+// rematerializing costs 2N.  Remat wins for N <= 2 and ties at N = 3;
+// for N >= 3 the allocator tends to keep the constant in a callee-saved
+// register anyway, so the theoretical regression does not materialize.
+//
+// Defs = [PSR]: the expanded ld.w with an immediate operand clobbers the
+// N/Z flags (see the note on MOV_ri32 below).
 def MOV_ri19 : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$imm),
     "# MOV_ri19 $rd, $imm",
     [(set GR32:$rd, immSExt19NotSExt6:$imm)]> {

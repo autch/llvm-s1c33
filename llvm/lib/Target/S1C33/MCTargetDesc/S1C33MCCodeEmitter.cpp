@@ -189,6 +189,8 @@ void S1C33MCCodeEmitter::encodeInstruction(const MCInst &Inst,
     unsigned RdEnc =
         Ctx.getRegisterInfo()->getEncodingValue(Inst.getOperand(0).getReg());
     const MCExpr *Sym = Inst.getOperand(1).getExpr();
+    // 0x6C00 = Class 3 `ld.w %rd, sign6` base opcode (|0110|11|sign6|rd|);
+    // the sign6 field stays zero here and is filled in by the abs_l fixup.
     uint16_t LdwWord = static_cast<uint16_t>(0x6C00 | RdEnc);
     if (LdwSymOp == S1C33::LDW_SYM_EXT2) {
       support::endian::write<uint16_t>(CB, 0xC000, llvm::endianness::little);

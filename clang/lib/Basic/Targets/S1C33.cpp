@@ -27,4 +27,8 @@ void S1C33TargetInfo::getTargetDefines(const LangOptions &Opts,
   Builder.defineMacro("__s1c33__");
   Builder.defineMacro("__S1C33__");
   Builder.defineMacro("__s1c33");
+  if (getTriple().isPIECE()) {
+    Builder.defineMacro("__piece__");
+    Builder.defineMacro("__PIECE__");
+  }
 }

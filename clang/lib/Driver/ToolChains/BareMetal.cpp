@@ -651,12 +651,6 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       if (IsStaticPIE)
         crt = "rcrt1.o";
       CmdArgs.push_back(Args.MakeArgString(TC.GetFilePath(crt)));
-      // S1C33/P/ECE: crti.o (defnotify default handler) follows crt0.o.
-      if (Triple.getArch() == llvm::Triple::s1c33) {
-        std::string CrtiPath = TC.GetFilePath("crti.o");
-        if (TC.getDriver().getVFS().exists(CrtiPath))
-          CmdArgs.push_back(Args.MakeArgString(CrtiPath));
-      }
     }
     if (TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D)) {
       auto RuntimeLib = TC.GetRuntimeLibType(Args);
@@ -678,15 +672,6 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  // S1C33: inject default linker script if the user did not supply -T.
-  if (Triple.getArch() == llvm::Triple::s1c33 &&
-      !Args.hasArg(options::OPT_T_Group)) {
-    SmallString<128> DefaultLD(TC.computeSysRoot());
-    llvm::sys::path::append(DefaultLD, "lib", "piece.ld");
-    if (TC.getDriver().getVFS().exists(DefaultLD))
-      CmdArgs.push_back(Args.MakeArgString("-T" + DefaultLD));
-  }
-
   Args.addAllArgs(CmdArgs,
                   {options::OPT_L, options::OPT_u, options::OPT_T_Group,
                    options::OPT_s, options::OPT_t, options::OPT_r});
@@ -702,10 +687,7 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   AddLinkerInputs(TC, Inputs, Args, CmdArgs, JA);
 
-  if (TC.ShouldLinkCXXStdlib(Args) &&
-      Triple.getArch() != llvm::Triple::s1c33) {
-    // S1C33: C++ runtime is in libcxxrt.a (inside --start-group below).
-    // No libc++ or libm needed.
+  if (TC.ShouldLinkCXXStdlib(Args)) {
     bool OnlyLibstdcxxStatic = Args.hasArg(options::OPT_static_libstdcxx) &&
                                !Args.hasArg(options::OPT_static);
     if (OnlyLibstdcxxStatic)
@@ -717,34 +699,13 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
-    if (Triple.getArch() == llvm::Triple::s1c33) {
-      // P/ECE default libraries in the canonical link order:
-      // libclang_rt.builtins-s1c33.a provides compiler-rt builtins (FP,
-      // integer division, 64-bit arithmetic); libcxxrt is the C++ runtime;
-      // libpceapi holds the P/ECE kernel API stubs; libc/libm come from
-      // newlib.  --start-group/--end-group handles circular references
-      // between the libraries.
-      //
-      // libpceshim sits ahead of -lc to shadow newlib's rand/srand and
-      // __assert_func with tiny single-threaded versions, breaking those
-      // symbols' dependency cascade into malloc and stdio.
-      CmdArgs.push_back("-lclang_rt.builtins-s1c33");
-      CmdArgs.push_back("--start-group");
-      CmdArgs.push_back("-lcxxrt");
-      CmdArgs.push_back("-lpceapi");
-      CmdArgs.push_back("-lpceshim");
+    CmdArgs.push_back("--start-group");
+    AddRunTimeLibs(TC, D, CmdArgs, Args);
+    if (!Args.hasArg(options::OPT_nolibc))
       CmdArgs.push_back("-lc");
-      CmdArgs.push_back("-lm");
-      CmdArgs.push_back("--end-group");
-    } else {
-      CmdArgs.push_back("--start-group");
-      AddRunTimeLibs(TC, D, CmdArgs, Args);
-      if (!Args.hasArg(options::OPT_nolibc))
-        CmdArgs.push_back("-lc");
-      if (TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D))
-        CmdArgs.push_back("-lgloss");
-      CmdArgs.push_back("--end-group");
-    }
+    if (TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D))
+      CmdArgs.push_back("-lgloss");
+    CmdArgs.push_back("--end-group");
   }
 
   if ((TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D)) &&

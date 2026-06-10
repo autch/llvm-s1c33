@@ -40,6 +40,7 @@
 #include "ToolChains/NetBSD.h"
 #include "ToolChains/OHOS.h"
 #include "ToolChains/OpenBSD.h"
+#include "ToolChains/PIECE.h"
 #include "ToolChains/PPCFreeBSD.h"
 #include "ToolChains/PPCLinux.h"
 #include "ToolChains/PS4CPU.h"
@@ -6941,6 +6942,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
               std::make_unique<toolchains::MSVCToolChain>(*this, Target, Args);
         break;
       }
+      break;
+    case llvm::Triple::PIECE:
+      TC = std::make_unique<toolchains::PIECEToolChain>(*this, Target, Args);
       break;
     case llvm::Triple::PS4:
       TC = std::make_unique<toolchains::PS4CPU>(*this, Target, Args);

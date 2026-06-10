@@ -1336,9 +1336,10 @@ static SDValue combineSrlSraBias(SDNode *N, SelectionDAG &DAG) {
   if (!InnerShiftC || InnerShiftC->getZExtValue() != 31)
     return SDValue();
 
-  unsigned ShiftCost = (31 + 7) / 8 + (K + 7) / 8;
-  if (ShiftCost <= 4)
-    return SDValue();
+  // No profitability check is needed: with a max shift of 8 per
+  // instruction, `sra x, 31` alone already costs 4 instructions and the
+  // outer srl adds at least one more, so the shift chain always exceeds
+  // the ~4-instruction SELECT_CC sequence emitBiasSelect produces.
 
   SDValue X = Inner.getOperand(0);
   uint64_t Bias = (1u << (32 - K)) - 1;
@@ -1370,10 +1371,10 @@ static SDValue combineAndSraBias(SDNode *N, SelectionDAG &DAG) {
   if (Mask == 0 || !isPowerOf2_64(Mask + 1))
     return SDValue();
 
-  // sra 31 costs 4 shifts; AND costs 1-2 (ext+and). Only optimize if total > 4.
-  unsigned AndCost = (Mask > 31) ? 2 : 1;
-  if (4 + AndCost <= 4)
-    return SDValue();
+  // No profitability check is needed: `sra x, 31` alone already costs 4
+  // shift instructions (max shift is 8 per instruction) and the AND adds
+  // 1-2 more, so the chain always exceeds the ~4-instruction SELECT_CC
+  // sequence emitBiasSelect produces.
 
   SDValue X = LHS.getOperand(0);
   return emitBiasSelect(X, Mask, SDLoc(N), DAG);

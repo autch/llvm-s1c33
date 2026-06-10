@@ -70,3 +70,24 @@ define void @large_array(i32 %val) {
   store i32 %val, ptr %p
   ret void
 }
+
+;-------------------------------------------------------------------------------
+; frame_over_imm10: frames larger than 1023 words (4092 bytes) split the SP
+; adjustment into multiple sub/add %sp instructions — imm10 is the one S1C33
+; immediate field with no ext form, so a single instruction cannot cover it.
+; 2049 words → 1023 + 1023 + 3.
+;-------------------------------------------------------------------------------
+
+; CHECK-LABEL: frame_over_imm10:
+; CHECK: sub %sp, 1023
+; CHECK-NEXT: sub %sp, 1023
+; CHECK-NEXT: sub %sp, 3
+; CHECK: add %sp, 1023
+; CHECK-NEXT: add %sp, 1023
+; CHECK-NEXT: add %sp, 3
+; CHECK: ret
+define void @frame_over_imm10(i32 %val) {
+  %pad = alloca [2049 x i32], align 4   ; 8196 bytes = 2049 words
+  store i32 %val, ptr %pad
+  ret void
+}

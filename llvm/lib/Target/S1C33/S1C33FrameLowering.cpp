@@ -48,6 +48,24 @@ static unsigned getCalleeSavedRegIdx(MCPhysReg Reg) {
 static const MCPhysReg CalleeSavedByIdx[] = {S1C33::R0, S1C33::R1, S1C33::R2,
                                              S1C33::R3};
 
+// Adjust SP by WordSize words using one or more sub/add %sp instructions.
+// The imm10 field is in word units and — uniquely among S1C33 immediates —
+// accepts no ext prefix, so a single instruction tops out at 1023 words
+// (4092 bytes).  Larger frames are rare but reachable (e.g. a big local
+// array, or the outgoing-argument area for a struct passed by value), and
+// truncating the immediate would corrupt the stack silently; split the
+// adjustment into 1023-word chunks instead.
+static void emitSPAdjustment(MachineBasicBlock &MBB,
+                             MachineBasicBlock::iterator MBBI,
+                             const DebugLoc &DL, const S1C33InstrInfo &TII,
+                             unsigned Opcode, uint64_t WordSize) {
+  while (WordSize > 0) {
+    uint64_t Chunk = std::min<uint64_t>(WordSize, 1023);
+    BuildMI(MBB, MBBI, DL, TII.get(Opcode)).addImm(Chunk);
+    WordSize -= Chunk;
+  }
+}
+
 // Expand ADJCALLSTACKDOWN/UP pseudo instructions.
 // When hasReservedCallFrame() is true the prologue already includes space for
 // the maximum outgoing call frame, so we just erase the pseudo.  Otherwise
@@ -64,11 +82,15 @@ MachineBasicBlock::iterator S1C33FrameLowering::eliminateCallFramePseudoInstr(
     unsigned Opcode = MI->getOpcode();
     int64_t Amount = MI->getOperand(0).getImm();
 
+    // Currently unreachable: dynamic_stackalloc is not selectable, so
+    // hasVarSizedObjects() is never true and the reserved-call-frame path
+    // above always applies.  Kept correct anyway: Amount is in bytes and
+    // sub/add %sp take word-unit immediates capped at 1023.
     if (Amount != 0) {
-      if (Opcode == S1C33::ADJCALLSTACKDOWN)
-        BuildMI(MBB, MI, DL, TII.get(S1C33::SUBSP_i)).addImm(Amount);
-      else
-        BuildMI(MBB, MI, DL, TII.get(S1C33::ADDSP_i)).addImm(Amount);
+      uint64_t WordSize = alignTo(Amount, 4) / 4;
+      unsigned SPOpc =
+          Opcode == S1C33::ADJCALLSTACKDOWN ? S1C33::SUBSP_i : S1C33::ADDSP_i;
+      emitSPAdjustment(MBB, MI, DL, TII, SPOpc, WordSize);
     }
   }
   return MBB.erase(MI);
@@ -127,11 +149,7 @@ void S1C33FrameLowering::emitPrologue(MachineFunction &MF,
   // eliminateFrameIndex sees the same value.
   uint64_t StackSize = alignTo(MFI.getStackSize(), 4);
   MFI.setStackSize(StackSize);
-  if (StackSize > 0) {
-    uint64_t WordSize = StackSize / 4;
-    assert(WordSize <= 1023 && "Stack frame too large for SUBSP_i imm10");
-    BuildMI(MBB, MBBI, DL, TII.get(S1C33::SUBSP_i)).addImm(WordSize);
-  }
+  emitSPAdjustment(MBB, MBBI, DL, TII, S1C33::SUBSP_i, StackSize / 4);
 }
 
 // Emit the function epilogue:
@@ -154,11 +172,7 @@ void S1C33FrameLowering::emitEpilogue(MachineFunction &MF,
   // emitPrologue rounded MFI's stack size up to a multiple of 4 already.
   uint64_t StackSize = MFI.getStackSize();
   assert((StackSize & 3) == 0 && "Stack size not aligned by emitPrologue");
-  if (StackSize > 0) {
-    uint64_t WordSize = StackSize / 4;
-    assert(WordSize <= 1023 && "Stack frame too large for ADDSP_i imm10");
-    BuildMI(MBB, MBBI, DL, TII.get(S1C33::ADDSP_i)).addImm(WordSize);
-  }
+  emitSPAdjustment(MBB, MBBI, DL, TII, S1C33::ADDSP_i, StackSize / 4);
 
   if (IsISR) {
     // Interrupt handler: restore all registers R15–R0 with popn %r15.

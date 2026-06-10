@@ -718,17 +718,12 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (Triple.getArch() == llvm::Triple::s1c33) {
-      // P/ECE default libraries in the canonical link order.
-      // libclang_rt.builtins-s1c33.a provides compiler-rt builtins (FP, integer
-      // division, 64-bit arithmetic) replacing the old libfp.a / libidiv.a.
-      // Using --start-group/--end-group to handle circular references between
-      // libraries.
-      //
-      // newlib Phase 2 Stage B: the gcc33-era EPSON SDK libraries
-      // (-lio -llib -lmath -lstring -lctype) have been dropped now that
-      // sample apps verify that newlib's libc.a / libm.a fully cover their
-      // symbol needs.  The SRF-converted .a files are no longer generated
-      // by tools/crt/Makefile.
+      // P/ECE default libraries in the canonical link order:
+      // libclang_rt.builtins-s1c33.a provides compiler-rt builtins (FP,
+      // integer division, 64-bit arithmetic); libcxxrt is the C++ runtime;
+      // libpceapi holds the P/ECE kernel API stubs; libc/libm come from
+      // newlib.  --start-group/--end-group handles circular references
+      // between the libraries.
       //
       // libpceshim sits ahead of -lc to shadow newlib's rand/srand and
       // __assert_func with tiny single-threaded versions, breaking those

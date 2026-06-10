@@ -1,7 +1,10 @@
 ; Verify that llvm-objdump annotates ext-extended immediates with a hex comment
 ; on the TARGET instruction line (not on the ext instruction line).
-; The instruction operand shows the RAW decoded value (sign-extended from the
-; native field width); the comment shows the ext-resolved value.
+; For non-PC-relative operands the instruction shows the RAW decoded value
+; (sign-extended from the native field width) and the comment shows the
+; ext-resolved value.  For PC-relative branches the operand shows the
+; ext-RESOLVED displacement (so MCInstrAnalysis can symbolize the real
+; target), followed by the resolved target label and the hex comment.
 ;
 ; RUN: llvm-mc -triple=s1c33-none-elf -filetype=obj %s -o %t
 ; RUN: llvm-objdump -d --triple=s1c33-none-elf %t | FileCheck %s
@@ -33,15 +36,16 @@
 
 ; ---- single ext: PC-relative branch -------------------------------------
 ; ext 0 + jreq raw disp=2 → extended = (0<<8)|2 = 2 = 0x2
-; Displayed operand = 2 (raw sign8); comment = # 0x2.
+; Displayed operand = 2 (resolved); target = 0x10 + 2*2 = 0x14; comment = # 0x2.
 ; CHECK:       ext     0
-; CHECK-NEXT:  jreq    2  {{.*}}# 0x2
+; CHECK-NEXT:  jreq    2 <.text+0x14>  {{.*}}# 0x2
 .2byte 0xc000    ; ext 0
 .2byte 0x1802    ; jreq raw disp=2
 
 ; ext 1 + jreq raw disp=0x80 (sign8=-128) → extended = (1<<8)|128 = 384 = 0x180
-; Displayed operand = -128 (raw sign8); comment = # 0x180.
+; Displayed operand = 384 (ext-resolved, NOT the raw sign8 -128); target =
+; 0x14 + 2*384 = 0x314; comment = # 0x180.
 ; CHECK:       ext     1
-; CHECK-NEXT:  jreq    -128  {{.*}}# 0x180
+; CHECK-NEXT:  jreq    384 <.text+0x314>  {{.*}}# 0x180
 .2byte 0xc001    ; ext 1
 .2byte 0x1880    ; jreq raw disp=0x80 (sign8=-128)

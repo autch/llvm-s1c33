@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// S1C33000 CPU Core Manual §4.3: 個別命令リファレンス
+// S1C33000 CPU Core Manual §4.3 (Individual Instruction Reference).
 //
 // Encoding convention:
 //   Operand names in (outs)/(ins) MUST match the bit field names in the
@@ -1697,7 +1697,7 @@ def BNOT : S1C33InstC5BitOp<0b101,
 //===----------------------------------------------------------------------===//
 // Bit operation with ext-extended displacement (Class 5 + ext form).
 //
-// CPU Manual §2.5.5 / quick reference 即値拡張(1): each bit operation accepts
+// CPU Manual §2.5.5 (Immediate Extension, case 1): each bit operation accepts
 // one or two preceding ext prefixes, yielding `[%rb+imm13]` (or `imm26`) as the
 // effective memory byte.  The displacement is UNSIGNED (zero-extended by ext)
 // — same rule as Class 1 memory instructions.

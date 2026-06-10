@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// S1C33000 CPU Core Manual §4.2: 命令コード体系 (Instruction Code System)
+// S1C33000 CPU Core Manual §4.2 (Instruction Code System).
 //
 // All instructions are 16-bit fixed-length.
 // Bits[15:13] determine the instruction class (Class 0–7).

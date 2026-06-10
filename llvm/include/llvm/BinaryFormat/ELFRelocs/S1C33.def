@@ -4,12 +4,14 @@
 
 // S1C33 ELF relocation types.
 //
-// There is no official ELF psABI for the S1C33: Epson's own toolchain
-// (S5U1C33000C, "gcc33") emitted its proprietary SRF object format, not ELF.
-// The relocation types below are defined by this port.  Their semantics
+// No official assignment of ELF relocation numbers for the S1C33 is
+// available: Epson's original toolchain (S5U1C33000C, "gcc33") emitted its
+// proprietary SRF object format, so ELF relocation numbers never existed
+// there, and no documentation of the relocation types used by the later
+// ELF-based S5U1C33001C ("xgcc") toolchain could be found.  The numeric
+// values below are therefore this port's own allocation.  Their semantics
 // (which instruction bits each one patches) mirror the gcc33 SRF relocation
-// kinds one-to-one so that SRF objects can be converted losslessly; the
-// numeric values are this port's own allocation.
+// kinds one-to-one so that SRF objects can be converted losslessly.
 //
 // PC-relative types use the address of the branch/call instruction itself
 // (not the first ext prefix and not the next instruction) as the PC base.

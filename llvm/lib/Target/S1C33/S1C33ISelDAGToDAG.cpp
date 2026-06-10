@@ -27,8 +27,7 @@ class S1C33DAGToDAGISel : public SelectionDAGISel {
 
 public:
   S1C33DAGToDAGISel() = delete;
-  explicit S1C33DAGToDAGISel(S1C33TargetMachine &TM)
-      : SelectionDAGISel(TM) {}
+  explicit S1C33DAGToDAGISel(S1C33TargetMachine &TM) : SelectionDAGISel(TM) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override {
     Subtarget = &MF.getSubtarget<S1C33Subtarget>();
@@ -120,15 +119,24 @@ static bool matchSPPlusConstAddr(SDValue Addr, int64_t &ByteOffOut) {
 // *_sp and therefore need no fixup.
 static unsigned spToRiOpcode(unsigned SpOpc) {
   switch (SpOpc) {
-  case S1C33::LDW_sp:  return S1C33::LDW_ri;
-  case S1C33::LDB_sp:  return S1C33::LDB_ri;
-  case S1C33::LDUB_sp: return S1C33::LDUB_ri;
-  case S1C33::LDH_sp:  return S1C33::LDH_ri;
-  case S1C33::LDUH_sp: return S1C33::LDUH_ri;
-  case S1C33::STW_sp:  return S1C33::STW_ri;
-  case S1C33::STB_sp:  return S1C33::STB_ri;
-  case S1C33::STH_sp:  return S1C33::STH_ri;
-  default:             return 0;
+  case S1C33::LDW_sp:
+    return S1C33::LDW_ri;
+  case S1C33::LDB_sp:
+    return S1C33::LDB_ri;
+  case S1C33::LDUB_sp:
+    return S1C33::LDUB_ri;
+  case S1C33::LDH_sp:
+    return S1C33::LDH_ri;
+  case S1C33::LDUH_sp:
+    return S1C33::LDUH_ri;
+  case S1C33::STW_sp:
+    return S1C33::STW_ri;
+  case S1C33::STB_sp:
+    return S1C33::STB_ri;
+  case S1C33::STH_sp:
+    return S1C33::STH_ri;
+  default:
+    return 0;
   }
 }
 
@@ -174,8 +182,8 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
     //     NeedsVR = true for these.
     //
     // For un-morphed ISD nodes, only ISD::LOAD/STORE with FrameIndex as the
-    // base pointer are safe; everything else (CopyToReg, ADD, SELECT, ...) needs
-    // a VR.
+    // base pointer are safe; everything else (CopyToReg, ADD, SELECT, ...)
+    // needs a VR.
     bool NeedsVR = false;
     // Already-selected *_sp memory instructions that hold this node as a
     // frame-index address operand.  These are "safe" only while the node
@@ -194,8 +202,7 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
         // Memory instructions have the address at SDNode operand 0.
         // Only that position is safe with TargetFrameIndex; value operands
         // (e.g. storing the address of a local variable) need a real VR.
-        const TargetInstrInfo *TII =
-            CurDAG->getSubtarget().getInstrInfo();
+        const TargetInstrInfo *TII = CurDAG->getSubtarget().getInstrInfo();
         const MCInstrDesc &Desc = TII->get(MachOpc);
         if ((Desc.mayLoad() || Desc.mayStore()) && Use.getOperandNo() == 0) {
           // A *_sp form cannot encode a register address.  Record it so it
@@ -319,8 +326,9 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
       int64_t Off;
       if (!matchSPPlusConstAddr(Addr, Off))
         break;
-      unsigned Scale = (Opc == S1C33::LDW_sp) ? 4 :
-                       (Opc == S1C33::LDH_sp || Opc == S1C33::LDUH_sp) ? 2 : 1;
+      unsigned Scale = (Opc == S1C33::LDW_sp)                            ? 4
+                       : (Opc == S1C33::LDH_sp || Opc == S1C33::LDUH_sp) ? 2
+                                                                         : 1;
       if ((Off % Scale) != 0 || uint64_t(Off / Scale) >= 64)
         break;
       AddrOp = CurDAG->getTargetConstant(Off / Scale, DL, MVT::i32);
@@ -363,8 +371,7 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
           AbsOpc = 0;
         if (AbsOpc) {
           SDNode *New = CurDAG->getMachineNode(
-              AbsOpc, DL, MVT::Other,
-              {AbsSym, ST->getValue(), ST->getChain()});
+              AbsOpc, DL, MVT::Other, {AbsSym, ST->getValue(), ST->getChain()});
           CurDAG->setNodeMemRefs(cast<MachineSDNode>(New),
                                  {ST->getMemOperand()});
           ReplaceUses(SDValue(Node, 0), SDValue(New, 0));
@@ -393,16 +400,17 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
       int64_t Off;
       if (!matchSPPlusConstAddr(Addr, Off))
         break;
-      unsigned Scale = (Opc == S1C33::STW_sp) ? 4 :
-                       (Opc == S1C33::STH_sp) ? 2 : 1;
+      unsigned Scale = (Opc == S1C33::STW_sp)   ? 4
+                       : (Opc == S1C33::STH_sp) ? 2
+                                                : 1;
       if ((Off % Scale) != 0 || uint64_t(Off / Scale) >= 64)
         break;
       AddrOp = CurDAG->getTargetConstant(Off / Scale, DL, MVT::i32);
     }
 
     // STX_sp operand order: (ins mem_sp:$imm6, GR32:$rd)
-    SDNode *New = CurDAG->getMachineNode(Opc, DL, MVT::Other,
-                                         {AddrOp, ST->getValue(), ST->getChain()});
+    SDNode *New = CurDAG->getMachineNode(
+        Opc, DL, MVT::Other, {AddrOp, ST->getValue(), ST->getChain()});
     CurDAG->setNodeMemRefs(cast<MachineSDNode>(New), {ST->getMemOperand()});
     ReplaceUses(SDValue(Node, 0), SDValue(New, 0));
     CurDAG->RemoveDeadNode(Node);
@@ -424,9 +432,15 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
 
     unsigned Opc;
     switch (Node->getOpcode()) {
-    case ISD::SHL: Opc = S1C33::SLL_ri; break;
-    case ISD::SRL: Opc = S1C33::SRL_ri; break;
-    default:       Opc = S1C33::SRA_ri; break;
+    case ISD::SHL:
+      Opc = S1C33::SLL_ri;
+      break;
+    case ISD::SRL:
+      Opc = S1C33::SRL_ri;
+      break;
+    default:
+      Opc = S1C33::SRA_ri;
+      break;
     }
 
     uint64_t Count = C->getZExtValue();
@@ -451,9 +465,9 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
     //   MOV_ri32 %tmp, const    ← trivially loop-invariant
     //   ANDxx_rr %rd, %tmp       ← in-loop register operation
     // MachineLICM can then hoist the MOV_ri32 out of any enclosing loop.
-    // Constants in the ±2^18 range (single ext) fall through to AND_ri32 pseudo,
-    // which expands post-RA to "ext imm13; and %rd, imm6" — 2 instructions
-    // and suitable for single-use cases.
+    // Constants in the ±2^18 range (single ext) fall through to AND_ri32
+    // pseudo, which expands post-RA to "ext imm13; and %rd, imm6" — 2
+    // instructions and suitable for single-use cases.
     SDValue LHS = Node->getOperand(0);
     SDValue RHS = Node->getOperand(1);
     // Normalise: constant on RHS.
@@ -465,9 +479,15 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
 
     unsigned Opc;
     switch (Node->getOpcode()) {
-    case ISD::AND: Opc = S1C33::AND_rr; break;
-    case ISD::OR:  Opc = S1C33::OR_rr;  break;
-    default:       Opc = S1C33::XOR_rr; break;
+    case ISD::AND:
+      Opc = S1C33::AND_rr;
+      break;
+    case ISD::OR:
+      Opc = S1C33::OR_rr;
+      break;
+    default:
+      Opc = S1C33::XOR_rr;
+      break;
     }
 
     SDValue TargetImm =
@@ -491,16 +511,16 @@ void S1C33DAGToDAGISel::Select(SDNode *Node) {
     KnownBits RHSBits = CurDAG->computeKnownBits(RHS);
     if (LHSBits.countMaxActiveBits() <= 16 &&
         RHSBits.countMaxActiveBits() <= 16) {
-      SDNode *Mul = CurDAG->getMachineNode(S1C33::MUL16U_r, DL, MVT::i32,
-                                            LHS, RHS);
+      SDNode *Mul =
+          CurDAG->getMachineNode(S1C33::MUL16U_r, DL, MVT::i32, LHS, RHS);
       ReplaceNode(Node, Mul);
       return;
     }
     unsigned LHSSign = CurDAG->ComputeNumSignBits(LHS);
     unsigned RHSSign = CurDAG->ComputeNumSignBits(RHS);
     if (LHSSign >= 17 && RHSSign >= 17) {
-      SDNode *Mul = CurDAG->getMachineNode(S1C33::MUL16S_r, DL, MVT::i32,
-                                            LHS, RHS);
+      SDNode *Mul =
+          CurDAG->getMachineNode(S1C33::MUL16S_r, DL, MVT::i32, LHS, RHS);
       ReplaceNode(Node, Mul);
       return;
     }
@@ -562,9 +582,8 @@ bool S1C33DAGToDAGISel::tryIndexedLoad(SDNode *N) {
   //   (outs GR32:$rd, GR32:$rb_out), (ins GR32:$rb)
   //   Constraints: $rb_out = $rb (tied).
   // Result tuple: (i32 rd, i32 rb_out, Other chain).
-  SDNode *New = CurDAG->getMachineNode(Opc, DL,
-                                        {MVT::i32, MVT::i32, MVT::Other},
-                                        {Base, Chain});
+  SDNode *New = CurDAG->getMachineNode(
+      Opc, DL, {MVT::i32, MVT::i32, MVT::Other}, {Base, Chain});
 
   // Transfer MachineMemOperand so alias analysis and scheduler see the mem op.
   CurDAG->setNodeMemRefs(cast<MachineSDNode>(New), {LD->getMemOperand()});
@@ -591,10 +610,17 @@ bool S1C33DAGToDAGISel::tryIndexedStore(SDNode *N) {
 
   unsigned Opc;
   switch (ST->getMemoryVT().getSimpleVT().SimpleTy) {
-  case MVT::i8:  Opc = S1C33::STB_ri_pi; break;
-  case MVT::i16: Opc = S1C33::STH_ri_pi; break;
-  case MVT::i32: Opc = S1C33::STW_ri_pi; break;
-  default: return false;
+  case MVT::i8:
+    Opc = S1C33::STB_ri_pi;
+    break;
+  case MVT::i16:
+    Opc = S1C33::STH_ri_pi;
+    break;
+  case MVT::i32:
+    Opc = S1C33::STW_ri_pi;
+    break;
+  default:
+    return false;
   }
 
   SDLoc DL(N);
@@ -607,7 +633,7 @@ bool S1C33DAGToDAGISel::tryIndexedStore(SDNode *N) {
   //   Constraints: $rb_out = $rb (tied).
   // Result tuple: (i32 rb_out, Other chain).
   SDNode *New = CurDAG->getMachineNode(Opc, DL, {MVT::i32, MVT::Other},
-                                        {Base, Val, Chain});
+                                       {Base, Val, Chain});
 
   CurDAG->setNodeMemRefs(cast<MachineSDNode>(New), {ST->getMemOperand()});
 

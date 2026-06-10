@@ -43,16 +43,16 @@ public:
         TLI(ST->getTargetLowering()) {}
 
   InstructionCost getIntImmCost(const APInt &Imm, Type *Ty,
-                                 TTI::TargetCostKind CostKind) const override;
+                                TTI::TargetCostKind CostKind) const override;
 
   InstructionCost getIntImmCostInst(unsigned Opcode, unsigned Idx,
-                                     const APInt &Imm, Type *Ty,
-                                     TTI::TargetCostKind CostKind,
-                                     Instruction *Inst = nullptr) const override;
+                                    const APInt &Imm, Type *Ty,
+                                    TTI::TargetCostKind CostKind,
+                                    Instruction *Inst = nullptr) const override;
 
-  InstructionCost getIntImmCostIntrin(Intrinsic::ID IID, unsigned Idx,
-                                       const APInt &Imm, Type *Ty,
-                                       TTI::TargetCostKind CostKind) const override;
+  InstructionCost
+  getIntImmCostIntrin(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
+                      Type *Ty, TTI::TargetCostKind CostKind) const override;
 };
 
 } // end namespace llvm

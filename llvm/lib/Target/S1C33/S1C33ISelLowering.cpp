@@ -13,7 +13,6 @@
 #include "S1C33Subtarget.h"
 #include "S1C33TargetMachine.h"
 #include "llvm/CodeGen/CallingConvLower.h"
-#include "llvm/IR/RuntimeLibcalls.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -21,12 +20,14 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/IR/RuntimeLibcalls.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 
 using namespace llvm;
 
-// CC_S1C33_AssignDoubleHalf — custom handler for the lo half of an i64/f64 pair.
+// CC_S1C33_AssignDoubleHalf — custom handler for the lo half of an i64/f64
+// pair.
 //
 // gcc33 rule: both halves of a 64-bit argument must go into two consecutive
 // argument registers (R12–R15), or both must go to stack.  Splitting between
@@ -44,11 +45,11 @@ using namespace llvm;
 // (so the hi half also misses CCAssignToReg and falls to CCAssignToStack),
 // assign the lo half to stack, and return true.
 static bool CC_S1C33_AssignDoubleHalf(unsigned ValNo, MVT ValVT, MVT LocVT,
-                                       CCValAssign::LocInfo LocInfo,
-                                       ISD::ArgFlagsTy ArgFlags,
-                                       CCState &State) {
-  static const MCPhysReg ArgRegs[] = {S1C33::R12, S1C33::R13,
-                                       S1C33::R14, S1C33::R15};
+                                      CCValAssign::LocInfo LocInfo,
+                                      ISD::ArgFlagsTy ArgFlags,
+                                      CCState &State) {
+  static const MCPhysReg ArgRegs[] = {S1C33::R12, S1C33::R13, S1C33::R14,
+                                      S1C33::R15};
   // Index of the first unallocated register (4 = all allocated).
   unsigned First = State.getFirstUnallocated(ArgRegs);
   // Need at least two consecutive regs (First and First+1).
@@ -71,7 +72,7 @@ static bool CC_S1C33_AssignDoubleHalf(unsigned ValNo, MVT ValVT, MVT LocVT,
 #include "S1C33GenCallingConv.inc"
 
 S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
-                                           const S1C33Subtarget &STI)
+                                         const S1C33Subtarget &STI)
     : TargetLowering(TM, STI), Subtarget(STI) {
   addRegisterClass(MVT::i32, &S1C33::GR32RegClass);
 
@@ -81,11 +82,12 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
 
   // GlobalAddress and ExternalSymbol must be lowered to target nodes so that
   // isel patterns (tglobaladdr, texternalsym) can match them.
-  setOperationAction(ISD::GlobalAddress,  MVT::i32, Custom);
+  setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
   setOperationAction(ISD::ExternalSymbol, MVT::i32, Custom);
   // ConstantPool addresses (e.g. De Bruijn tables from CTTZ expansion) must be
-  // lowered like GlobalAddress — materialize the address via ext+ld.w sequences.
-  setOperationAction(ISD::ConstantPool,   MVT::i32, Custom);
+  // lowered like GlobalAddress — materialize the address via ext+ld.w
+  // sequences.
+  setOperationAction(ISD::ConstantPool, MVT::i32, Custom);
 
   // S1C33 is not in the generated RuntimeLibcallsImpl target table
   // (setTargetRuntimeLibcallSets has no S1C33 entry), so AvailableLibcallImpls
@@ -93,38 +95,38 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   // We must explicitly register every libcall implementation we want to use.
 
   // Memory operations — implemented in P/ECE SDK string.lib.
-  setLibcallImpl(RTLIB::MEMCPY,  RTLIB::impl_memcpy);
+  setLibcallImpl(RTLIB::MEMCPY, RTLIB::impl_memcpy);
   setLibcallImpl(RTLIB::MEMMOVE, RTLIB::impl_memmove);
-  setLibcallImpl(RTLIB::MEMSET,  RTLIB::impl_memset);
+  setLibcallImpl(RTLIB::MEMSET, RTLIB::impl_memset);
 
   // Integer division/remainder — 32-bit: P/ECE SDK idiv.lib.
-  setLibcallImpl(RTLIB::SDIV_I32,  RTLIB::impl___divsi3);
-  setLibcallImpl(RTLIB::UDIV_I32,  RTLIB::impl___udivsi3);
-  setLibcallImpl(RTLIB::SREM_I32,  RTLIB::impl___modsi3);
-  setLibcallImpl(RTLIB::UREM_I32,  RTLIB::impl___umodsi3);
+  setLibcallImpl(RTLIB::SDIV_I32, RTLIB::impl___divsi3);
+  setLibcallImpl(RTLIB::UDIV_I32, RTLIB::impl___udivsi3);
+  setLibcallImpl(RTLIB::SREM_I32, RTLIB::impl___modsi3);
+  setLibcallImpl(RTLIB::UREM_I32, RTLIB::impl___umodsi3);
   // 64-bit integer arithmetic — compiler-rt builtins.
-  setLibcallImpl(RTLIB::MUL_I64,  RTLIB::impl___muldi3);
+  setLibcallImpl(RTLIB::MUL_I64, RTLIB::impl___muldi3);
   setLibcallImpl(RTLIB::SDIV_I64, RTLIB::impl___divdi3);
   setLibcallImpl(RTLIB::UDIV_I64, RTLIB::impl___udivdi3);
   setLibcallImpl(RTLIB::SREM_I64, RTLIB::impl___moddi3);
   setLibcallImpl(RTLIB::UREM_I64, RTLIB::impl___umoddi3);
-  setLibcallImpl(RTLIB::SHL_I64,  RTLIB::impl___ashldi3);
-  setLibcallImpl(RTLIB::SRL_I64,  RTLIB::impl___lshrdi3);
-  setLibcallImpl(RTLIB::SRA_I64,  RTLIB::impl___ashrdi3);
+  setLibcallImpl(RTLIB::SHL_I64, RTLIB::impl___ashldi3);
+  setLibcallImpl(RTLIB::SRL_I64, RTLIB::impl___lshrdi3);
+  setLibcallImpl(RTLIB::SRA_I64, RTLIB::impl___ashrdi3);
 
   // Floating-point arithmetic — implemented in P/ECE SDK fp.lib.
-  setLibcallImpl(RTLIB::ADD_F32,  RTLIB::impl___addsf3);
-  setLibcallImpl(RTLIB::SUB_F32,  RTLIB::impl___subsf3);
-  setLibcallImpl(RTLIB::MUL_F32,  RTLIB::impl___mulsf3);
-  setLibcallImpl(RTLIB::DIV_F32,  RTLIB::impl___divsf3);
-  setLibcallImpl(RTLIB::ADD_F64,  RTLIB::impl___adddf3);
-  setLibcallImpl(RTLIB::SUB_F64,  RTLIB::impl___subdf3);
-  setLibcallImpl(RTLIB::MUL_F64,  RTLIB::impl___muldf3);
-  setLibcallImpl(RTLIB::DIV_F64,  RTLIB::impl___divdf3);
+  setLibcallImpl(RTLIB::ADD_F32, RTLIB::impl___addsf3);
+  setLibcallImpl(RTLIB::SUB_F32, RTLIB::impl___subsf3);
+  setLibcallImpl(RTLIB::MUL_F32, RTLIB::impl___mulsf3);
+  setLibcallImpl(RTLIB::DIV_F32, RTLIB::impl___divsf3);
+  setLibcallImpl(RTLIB::ADD_F64, RTLIB::impl___adddf3);
+  setLibcallImpl(RTLIB::SUB_F64, RTLIB::impl___subdf3);
+  setLibcallImpl(RTLIB::MUL_F64, RTLIB::impl___muldf3);
+  setLibcallImpl(RTLIB::DIV_F64, RTLIB::impl___divdf3);
 
   // Floating-point conversions — fp.lib.
-  setLibcallImpl(RTLIB::FPEXT_F32_F64,    RTLIB::impl___extendsfdf2);
-  setLibcallImpl(RTLIB::FPROUND_F64_F32,  RTLIB::impl___truncdfsf2);
+  setLibcallImpl(RTLIB::FPEXT_F32_F64, RTLIB::impl___extendsfdf2);
+  setLibcallImpl(RTLIB::FPROUND_F64_F32, RTLIB::impl___truncdfsf2);
   setLibcallImpl(RTLIB::FPTOSINT_F32_I32, RTLIB::impl___fixsfsi);
   setLibcallImpl(RTLIB::FPTOSINT_F64_I32, RTLIB::impl___fixdfsi);
   setLibcallImpl(RTLIB::FPTOUINT_F32_I32, RTLIB::impl___fixunssfsi);
@@ -152,33 +154,35 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   setLibcallImpl(RTLIB::OLE_F32, RTLIB::impl___lesf2);
   setLibcallImpl(RTLIB::OGT_F32, RTLIB::impl___gtsf2);
   setLibcallImpl(RTLIB::OGE_F32, RTLIB::impl___gesf2);
-  setLibcallImpl(RTLIB::UO_F32,  RTLIB::impl___unordsf2);
+  setLibcallImpl(RTLIB::UO_F32, RTLIB::impl___unordsf2);
   setLibcallImpl(RTLIB::OEQ_F64, RTLIB::impl___eqdf2);
   setLibcallImpl(RTLIB::UNE_F64, RTLIB::impl___nedf2);
   setLibcallImpl(RTLIB::OLT_F64, RTLIB::impl___ltdf2);
   setLibcallImpl(RTLIB::OLE_F64, RTLIB::impl___ledf2);
   setLibcallImpl(RTLIB::OGT_F64, RTLIB::impl___gtdf2);
   setLibcallImpl(RTLIB::OGE_F64, RTLIB::impl___gedf2);
-  setLibcallImpl(RTLIB::UO_F64,  RTLIB::impl___unorddf2);
-  setOperationAction(ISD::SDIV,    MVT::i32, Expand);
-  setOperationAction(ISD::UDIV,    MVT::i32, Expand);
-  setOperationAction(ISD::SREM,    MVT::i32, Expand);
-  setOperationAction(ISD::UREM,    MVT::i32, Expand);
+  setLibcallImpl(RTLIB::UO_F64, RTLIB::impl___unorddf2);
+  setOperationAction(ISD::SDIV, MVT::i32, Expand);
+  setOperationAction(ISD::UDIV, MVT::i32, Expand);
+  setOperationAction(ISD::SREM, MVT::i32, Expand);
+  setOperationAction(ISD::UREM, MVT::i32, Expand);
   // Prevent the DAG combiner from forming combined SDIVREM/UDIVREM nodes;
   // split them back into SDIV+SREM pairs so each expands to its own libcall.
   setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
   setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
 
   // Integer multiplication:
-  //   With HWMul (+hwmul): ISD::MUL/MULHS/MULHU are Legal (MUL_r/MULHS_r/MULHU_r Pat<>)
-  //   Without HWMul:       ISD::MUL expands to __mulsi3 libcall; MULHS/MULHU expand
+  //   With HWMul (+hwmul): ISD::MUL/MULHS/MULHU are Legal
+  //   (MUL_r/MULHS_r/MULHU_r Pat<>) Without HWMul:       ISD::MUL expands to
+  //   __mulsi3 libcall; MULHS/MULHU expand
   // SMUL_LOHI/UMUL_LOHI are always Expand: we don't want the DAGCombiner to
-  // produce them for plain i32 multiply — our mlt.w pattern handles MUL directly.
+  // produce them for plain i32 multiply — our mlt.w pattern handles MUL
+  // directly.
   setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
   if (!STI.hasHWMul()) {
     setLibcallImpl(RTLIB::MUL_I32, RTLIB::impl___mulsi3);
-    setOperationAction(ISD::MUL,   MVT::i32, Expand);
+    setOperationAction(ISD::MUL, MVT::i32, Expand);
     setOperationAction(ISD::MULHS, MVT::i32, Expand);
     setOperationAction(ISD::MULHU, MVT::i32, Expand);
   }
@@ -187,8 +191,8 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   // register-to-register instructions.  Mark Legal so ISel matches the
   // LDB_rr / LDH_rr patterns (1 instruction) instead of expanding to
   // shift pairs (6 instructions for i8, 4 for i16).
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1,  Expand);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8,  Legal);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Legal);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Legal);
 
   // S1C33 has no byte-swap instruction.  SWAP swaps halfwords (rotate-16),
@@ -203,15 +207,15 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
 
   // Conditional branches: lower BR_CC to S1C33ISD::CMP + S1C33ISD::BRCOND.
-  setOperationAction(ISD::BR_CC,    MVT::i32,   Custom);
+  setOperationAction(ISD::BR_CC, MVT::i32, Custom);
   // SELECT: no conditional move on S1C33; lower to SELECT_CC(cond, 0, T, F, NE)
-  setOperationAction(ISD::SELECT,    MVT::i32,   Custom);
-  setOperationAction(ISD::SELECT_CC, MVT::i32,   Custom);
+  setOperationAction(ISD::SELECT, MVT::i32, Custom);
+  setOperationAction(ISD::SELECT_CC, MVT::i32, Custom);
   // BRCOND requires a boolean condition — expand to BR_CC instead.
-  setOperationAction(ISD::BRCOND,   MVT::Other, Expand);
+  setOperationAction(ISD::BRCOND, MVT::Other, Expand);
   // SETCC produces a boolean i32 (0 or 1) from a comparison.
   // Lower to SELECT_CC(lhs, rhs, 1, 0, cc) which expands via our SELECT pseudo.
-  setOperationAction(ISD::SETCC,    MVT::i32,   Custom);
+  setOperationAction(ISD::SETCC, MVT::i32, Custom);
 
   // Large constant shifts (> 8) are expanded in ISelDAGToDAG::Select()
   // into chains of machine shift instructions (each ≤ 8), bypassing the
@@ -219,14 +223,14 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
 
   // Variadic function support.
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
-  setOperationAction(ISD::VAARG,   MVT::Other, Expand);
-  setOperationAction(ISD::VACOPY,  MVT::Other, Custom);
-  setOperationAction(ISD::VAEND,   MVT::Other, Expand);
+  setOperationAction(ISD::VAARG, MVT::Other, Expand);
+  setOperationAction(ISD::VACOPY, MVT::Other, Custom);
+  setOperationAction(ISD::VAEND, MVT::Other, Expand);
 
   // S1C33 has no count-leading/trailing zeros or popcount instructions.
   // Expand to software sequences.
-  setOperationAction(ISD::CTTZ,  MVT::i32, Expand);
-  setOperationAction(ISD::CTLZ,  MVT::i32, Expand);
+  setOperationAction(ISD::CTTZ, MVT::i32, Expand);
+  setOperationAction(ISD::CTLZ, MVT::i32, Expand);
   setOperationAction(ISD::CTPOP, MVT::i32, Expand);
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Expand);
   setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Expand);
@@ -254,14 +258,22 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
 
 const char *S1C33TargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch (Opcode) {
-  case S1C33ISD::RET_FLAG:  return "S1C33ISD::RET_FLAG";
-  case S1C33ISD::RETI_FLAG: return "S1C33ISD::RETI_FLAG";
-  case S1C33ISD::CALL:      return "S1C33ISD::CALL";
-  case S1C33ISD::CMP:       return "S1C33ISD::CMP";
-  case S1C33ISD::BRCOND:    return "S1C33ISD::BRCOND";
-  case S1C33ISD::SELECT_CC: return "S1C33ISD::SELECT_CC";
-  case S1C33ISD::Wrapper:   return "S1C33ISD::Wrapper";
-  default:                   return nullptr;
+  case S1C33ISD::RET_FLAG:
+    return "S1C33ISD::RET_FLAG";
+  case S1C33ISD::RETI_FLAG:
+    return "S1C33ISD::RETI_FLAG";
+  case S1C33ISD::CALL:
+    return "S1C33ISD::CALL";
+  case S1C33ISD::CMP:
+    return "S1C33ISD::CMP";
+  case S1C33ISD::BRCOND:
+    return "S1C33ISD::BRCOND";
+  case S1C33ISD::SELECT_CC:
+    return "S1C33ISD::SELECT_CC";
+  case S1C33ISD::Wrapper:
+    return "S1C33ISD::Wrapper";
+  default:
+    return nullptr;
   }
 }
 
@@ -271,16 +283,26 @@ const char *S1C33TargetLowering::getTargetNodeName(unsigned Opcode) const {
 
 static S1C33CC::CondCode convertCondCode(ISD::CondCode CC) {
   switch (CC) {
-  case ISD::SETEQ:  return S1C33CC::EQ;
-  case ISD::SETNE:  return S1C33CC::NE;
-  case ISD::SETLT:  return S1C33CC::LT;
-  case ISD::SETLE:  return S1C33CC::LE;
-  case ISD::SETGT:  return S1C33CC::GT;
-  case ISD::SETGE:  return S1C33CC::GE;
-  case ISD::SETULT: return S1C33CC::ULT;
-  case ISD::SETULE: return S1C33CC::ULE;
-  case ISD::SETUGT: return S1C33CC::UGT;
-  case ISD::SETUGE: return S1C33CC::UGE;
+  case ISD::SETEQ:
+    return S1C33CC::EQ;
+  case ISD::SETNE:
+    return S1C33CC::NE;
+  case ISD::SETLT:
+    return S1C33CC::LT;
+  case ISD::SETLE:
+    return S1C33CC::LE;
+  case ISD::SETGT:
+    return S1C33CC::GT;
+  case ISD::SETGE:
+    return S1C33CC::GE;
+  case ISD::SETULT:
+    return S1C33CC::ULT;
+  case ISD::SETULE:
+    return S1C33CC::ULE;
+  case ISD::SETUGT:
+    return S1C33CC::UGT;
+  case ISD::SETUGE:
+    return S1C33CC::UGE;
   default:
     llvm_unreachable("Unsupported condition code for S1C33");
   }
@@ -288,16 +310,26 @@ static S1C33CC::CondCode convertCondCode(ISD::CondCode CC) {
 
 static unsigned getBranchOpcode(S1C33CC::CondCode CC) {
   switch (CC) {
-  case S1C33CC::EQ:  return S1C33::JREQ;
-  case S1C33CC::NE:  return S1C33::JRNE;
-  case S1C33CC::LT:  return S1C33::JRLT;
-  case S1C33CC::LE:  return S1C33::JRLE;
-  case S1C33CC::GT:  return S1C33::JRGT;
-  case S1C33CC::GE:  return S1C33::JRGE;
-  case S1C33CC::ULT: return S1C33::JRULT;
-  case S1C33CC::ULE: return S1C33::JRULE;
-  case S1C33CC::UGT: return S1C33::JRUGT;
-  case S1C33CC::UGE: return S1C33::JRUGE;
+  case S1C33CC::EQ:
+    return S1C33::JREQ;
+  case S1C33CC::NE:
+    return S1C33::JRNE;
+  case S1C33CC::LT:
+    return S1C33::JRLT;
+  case S1C33CC::LE:
+    return S1C33::JRLE;
+  case S1C33CC::GT:
+    return S1C33::JRGT;
+  case S1C33CC::GE:
+    return S1C33::JRGE;
+  case S1C33CC::ULT:
+    return S1C33::JRULT;
+  case S1C33CC::ULE:
+    return S1C33::JRULE;
+  case S1C33CC::UGT:
+    return S1C33::JRUGT;
+  case S1C33CC::UGE:
+    return S1C33::JRUGE;
   }
   llvm_unreachable("Unknown S1C33CC");
 }
@@ -307,20 +339,29 @@ static unsigned getBranchOpcode(S1C33CC::CondCode CC) {
 //===----------------------------------------------------------------------===//
 
 SDValue S1C33TargetLowering::LowerOperation(SDValue Op,
-                                              SelectionDAG &DAG) const {
+                                            SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Unimplemented custom lowering");
 
-  case ISD::BR_CC:    return LowerBR_CC(Op, DAG);
-  case ISD::SELECT:   return LowerSELECT(Op, DAG);
-  case ISD::SELECT_CC: return LowerSELECT_CC(Op, DAG);
-  case ISD::SETCC:    return LowerSETCC(Op, DAG);
-  case ISD::SHL_PARTS: return LowerSHL_PARTS(Op, DAG);
-  case ISD::SRL_PARTS: return LowerSRL_PARTS(Op, DAG);
-  case ISD::SRA_PARTS: return LowerSRA_PARTS(Op, DAG);
-  case ISD::VASTART:  return LowerVASTART(Op, DAG);
-  case ISD::VACOPY:   return LowerVACOPY(Op, DAG);
+  case ISD::BR_CC:
+    return LowerBR_CC(Op, DAG);
+  case ISD::SELECT:
+    return LowerSELECT(Op, DAG);
+  case ISD::SELECT_CC:
+    return LowerSELECT_CC(Op, DAG);
+  case ISD::SETCC:
+    return LowerSETCC(Op, DAG);
+  case ISD::SHL_PARTS:
+    return LowerSHL_PARTS(Op, DAG);
+  case ISD::SRL_PARTS:
+    return LowerSRL_PARTS(Op, DAG);
+  case ISD::SRA_PARTS:
+    return LowerSRA_PARTS(Op, DAG);
+  case ISD::VASTART:
+    return LowerVASTART(Op, DAG);
+  case ISD::VACOPY:
+    return LowerVACOPY(Op, DAG);
 
   case ISD::GlobalAddress: {
     // Wrap TargetGlobalAddress in S1C33ISD::Wrapper so that the isel pattern
@@ -354,15 +395,16 @@ SDValue S1C33TargetLowering::LowerOperation(SDValue Op,
 
   case ISD::ConstantPool: {
     // Materialize the address of a constant pool entry (e.g. De Bruijn lookup
-    // tables from CTTZ expansion) using the same ext+ld.w path as GlobalAddress.
+    // tables from CTTZ expansion) using the same ext+ld.w path as
+    // GlobalAddress.
     auto *N = cast<ConstantPoolSDNode>(Op);
     SDValue TCP;
     if (N->isMachineConstantPoolEntry())
       TCP = DAG.getTargetConstantPool(N->getMachineCPVal(), MVT::i32,
                                       N->getAlign(), N->getOffset());
     else
-      TCP = DAG.getTargetConstantPool(N->getConstVal(), MVT::i32,
-                                      N->getAlign(), N->getOffset());
+      TCP = DAG.getTargetConstantPool(N->getConstVal(), MVT::i32, N->getAlign(),
+                                      N->getOffset());
     return DAG.getNode(S1C33ISD::Wrapper, SDLoc(Op), MVT::i32, TCP);
   }
   }
@@ -411,7 +453,8 @@ SDValue S1C33TargetLowering::LowerFormalArguments(
   CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
   if (IsVarArg) {
     unsigned NumParams = MF.getFunction().getFunctionType()->getNumParams();
-    unsigned LastNamed = NumParams - 1; // C requires >= 1 named param before '...'
+    unsigned LastNamed =
+        NumParams - 1; // C requires >= 1 named param before '...'
     // ScalarIns entries are in original-argument order; find the first entry
     // that belongs to the last named parameter.
     unsigned Split = 0;
@@ -450,9 +493,9 @@ SDValue S1C33TargetLowering::LowerFormalArguments(
       // eliminateFrameIndex can compute the correct SP-relative offset after
       // the prologue (accounting for the return address + callee-saved area).
       assert(VA.isMemLoc());
-      int FI = MF.getFrameInfo().CreateFixedObject(
-          VA.getLocVT().getStoreSize(), VA.getLocMemOffset(),
-          /*IsImmutable=*/true);
+      int FI = MF.getFrameInfo().CreateFixedObject(VA.getLocVT().getStoreSize(),
+                                                   VA.getLocMemOffset(),
+                                                   /*IsImmutable=*/true);
       SDValue FIPtr = DAG.getFrameIndex(FI, MVT::i32);
       ArgVal = DAG.getLoad(VA.getValVT(), DL, Chain, FIPtr,
                            MachinePointerInfo::getFixedStack(MF, FI));
@@ -464,8 +507,7 @@ SDValue S1C33TargetLowering::LowerFormalArguments(
     // down so the rest of ISel sees the value in the low bits.  The coerced
     // argument is recognised by the `inreg` flag clang attaches to it.
     EVT ArgVT = Ins[InsI].ArgVT;
-    if (Ins[InsI].Flags.isInReg() &&
-        (ArgVT == MVT::i8 || ArgVT == MVT::i16) &&
+    if (Ins[InsI].Flags.isInReg() && (ArgVT == MVT::i8 || ArgVT == MVT::i16) &&
         ArgVal.getValueType() == MVT::i32) {
       unsigned ShAmt = 32 - ArgVT.getSizeInBits();
       ArgVal = DAG.getNode(ISD::SRL, DL, MVT::i32, ArgVal,
@@ -495,8 +537,8 @@ SDValue S1C33TargetLowering::LowerFormalArguments(
   // All fixed args consumed CCInfo.getStackSize() bytes; variadic args follow.
   if (IsVarArg) {
     int64_t VarArgsOffset = CCInfo.getStackSize();
-    int VarArgFI = MF.getFrameInfo().CreateFixedObject(
-        4, VarArgsOffset, /*IsImmutable=*/true);
+    int VarArgFI = MF.getFrameInfo().CreateFixedObject(4, VarArgsOffset,
+                                                       /*IsImmutable=*/true);
     FuncInfo->setVarArgsFrameIndex(VarArgFI);
   }
 
@@ -509,11 +551,12 @@ SDValue S1C33TargetLowering::LowerFormalArguments(
 
 // Lower the return instruction using the S5U1C33000C ABI:
 //   R10 for 32-bit return, R10+R11 for 64-bit.
-SDValue S1C33TargetLowering::LowerReturn(
-    SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
-    const SmallVectorImpl<ISD::OutputArg> &Outs,
-    const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
-    SelectionDAG &DAG) const {
+SDValue
+S1C33TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
+                                 bool IsVarArg,
+                                 const SmallVectorImpl<ISD::OutputArg> &Outs,
+                                 const SmallVectorImpl<SDValue> &OutVals,
+                                 const SDLoc &DL, SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
 
   // Determine return-value register assignments.
@@ -548,9 +591,8 @@ SDValue S1C33TargetLowering::LowerReturn(
 // Call lowering
 //===----------------------------------------------------------------------===//
 
-SDValue
-S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
-                                 SmallVectorImpl<SDValue> &InVals) const {
+SDValue S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
+                                       SmallVectorImpl<SDValue> &InVals) const {
   SelectionDAG &DAG = CLI.DAG;
   SDLoc &DL = CLI.DL;
   SmallVectorImpl<ISD::OutputArg> &Outs = CLI.Outs;
@@ -573,7 +615,8 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
   //
   // The third case arises when:
   //   (a) a libcall is generated for an unregistered RTLIB entry whose
-  //       getLibcallName() returns nullptr (would crash in getTargetExternalSymbol),
+  //       getLibcallName() returns nullptr (would crash in
+  //       getTargetExternalSymbol),
   //   (b) the callee is a function pointer (GR32 register value), or
   //   (c) legalization already wrapped a GlobalAddress before LowerCall ran.
   if (auto *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
@@ -602,9 +645,9 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
   SmallVector<ISD::OutputArg, 16> ScalarOuts;
   SmallVector<SDValue, 16> ScalarOutVals;
   struct ByValInfo {
-    unsigned OrigIdx;   // index in Outs[]
-    unsigned Size;      // byte size of struct
-    unsigned StackOff;  // assigned later
+    unsigned OrigIdx;  // index in Outs[]
+    unsigned Size;     // byte size of struct
+    unsigned StackOff; // assigned later
   };
   SmallVector<ByValInfo, 4> ByValArgs;
 
@@ -721,16 +764,15 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
       if (w > 0)
         WordAddr = DAG.getNode(ISD::ADD, DL, MVT::i32, Src,
                                DAG.getConstant(w * 4, DL, MVT::i32));
-      SDValue Word = DAG.getLoad(MVT::i32, DL, Chain, WordAddr,
-                                 MachinePointerInfo());
+      SDValue Word =
+          DAG.getLoad(MVT::i32, DL, Chain, WordAddr, MachinePointerInfo());
       Chain = Word.getValue(1);
 
       unsigned Off = BV.StackOff + w * 4;
       SDValue DstAddr = DAG.getNode(ISD::ADD, DL, MVT::i32, StackPtr,
                                     DAG.getConstant(Off, DL, MVT::i32));
-      MemOpChains.push_back(
-          DAG.getStore(Chain, DL, Word, DstAddr,
-                       MachinePointerInfo::getStack(MF, Off)));
+      MemOpChains.push_back(DAG.getStore(
+          Chain, DL, Word, DstAddr, MachinePointerInfo::getStack(MF, Off)));
     }
   }
 
@@ -753,7 +795,8 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
   for (auto &[Reg, Val] : RegsToPass)
     Ops.push_back(DAG.getRegister(Reg, MVT::i32));
 
-  // Register mask — indicates which physical registers are preserved across call.
+  // Register mask — indicates which physical registers are preserved across
+  // call.
   const TargetRegisterInfo *TRI = Subtarget.getRegisterInfo();
   const uint32_t *Mask = TRI->getCallPreservedMask(MF, CLI.CallConv);
   assert(Mask && "Missing call preserved mask for calling convention");
@@ -777,11 +820,11 @@ S1C33TargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   for (const CCValAssign &VA : RVLocs) {
     assert(VA.isRegLoc() && "Return value must be in a register");
-    SDValue Val = DAG.getCopyFromReg(Chain, DL, VA.getLocReg(),
-                                     VA.getValVT(), InGlue);
+    SDValue Val =
+        DAG.getCopyFromReg(Chain, DL, VA.getLocReg(), VA.getValVT(), InGlue);
     InVals.push_back(Val.getValue(0));
-    Chain   = Val.getValue(1);
-    InGlue  = Val.getValue(2);
+    Chain = Val.getValue(1);
+    InGlue = Val.getValue(2);
   }
 
   return Chain;
@@ -802,13 +845,14 @@ SDValue S1C33TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
 
   S1C33CC::CondCode S1C33CC = convertCondCode(CC);
   SDValue Cmp = DAG.getNode(S1C33ISD::CMP, DL, MVT::Glue, LHS, RHS);
-  return DAG.getNode(S1C33ISD::BRCOND, DL, MVT::Other,
-                     Chain, Dest, DAG.getConstant(S1C33CC, DL, MVT::i32), Cmp);
+  return DAG.getNode(S1C33ISD::BRCOND, DL, MVT::Other, Chain, Dest,
+                     DAG.getConstant(S1C33CC, DL, MVT::i32), Cmp);
 }
 
 // Lower ISD::SETCC to SELECT_CC(lhs, rhs, 1, 0, cc).
 // S1C33 has no native "compare and set boolean" instruction; we reuse the
-// SELECT_CC → SELECT pseudo path which expands to CMP + conditional branch + PHI.
+// SELECT_CC → SELECT pseudo path which expands to CMP + conditional branch +
+// PHI.
 SDValue S1C33TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SDValue LHS = Op.getOperand(0);
@@ -816,10 +860,9 @@ SDValue S1C33TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
 
   S1C33CC::CondCode S1C33CC = convertCondCode(CC);
-  SDValue True  = DAG.getConstant(1, DL, MVT::i32);
+  SDValue True = DAG.getConstant(1, DL, MVT::i32);
   SDValue False = DAG.getConstant(0, DL, MVT::i32);
-  return DAG.getNode(S1C33ISD::SELECT_CC, DL, MVT::i32,
-                     LHS, RHS, True, False,
+  return DAG.getNode(S1C33ISD::SELECT_CC, DL, MVT::i32, LHS, RHS, True, False,
                      DAG.getConstant(S1C33CC, DL, MVT::i32));
 }
 
@@ -834,8 +877,7 @@ SDValue S1C33TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
 // variadic slot (immediately past the last named argument).
 //
 // VASTART(ptr) — store the address of the first variadic arg into *ptr.
-SDValue S1C33TargetLowering::LowerVASTART(SDValue Op,
-                                            SelectionDAG &DAG) const {
+SDValue S1C33TargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
   S1C33MachineFunctionInfo *FuncInfo = MF.getInfo<S1C33MachineFunctionInfo>();
 
@@ -844,14 +886,15 @@ SDValue S1C33TargetLowering::LowerVASTART(SDValue Op,
   SDValue VaListPtr = Op.getOperand(1);
   MachinePointerInfo PtrInfo =
       cast<SrcValueSDNode>(Op.getOperand(2))->getValue()
-          ? MachinePointerInfo(cast<SrcValueSDNode>(Op.getOperand(2))->getValue())
+          ? MachinePointerInfo(
+                cast<SrcValueSDNode>(Op.getOperand(2))->getValue())
           : MachinePointerInfo();
 
   // Materialize the runtime address of the first variadic argument.
   // ADJFI expands to: ld.w %rd, %sp; add %rd, offset
   // so that %rd holds the absolute address (SP + offset) at runtime.
-  SDValue TFI = DAG.getTargetFrameIndex(FuncInfo->getVarArgsFrameIndex(),
-                                         MVT::i32);
+  SDValue TFI =
+      DAG.getTargetFrameIndex(FuncInfo->getVarArgsFrameIndex(), MVT::i32);
   SDValue VarArgsAddr =
       SDValue(DAG.getMachineNode(S1C33::ADJFI, DL, MVT::i32, TFI), 0);
 
@@ -861,18 +904,17 @@ SDValue S1C33TargetLowering::LowerVASTART(SDValue Op,
 
 // Lower ISD::VACOPY — copy a va_list (just a pointer copy).
 // va_list on S1C33 is a single i32 pointer; copying it is a plain 4-byte store.
-SDValue S1C33TargetLowering::LowerVACOPY(SDValue Op,
-                                           SelectionDAG &DAG) const {
+SDValue S1C33TargetLowering::LowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
-  SDValue Chain   = Op.getOperand(0);
-  SDValue DstPtr  = Op.getOperand(1);  // destination va_list address
-  SDValue SrcPtr  = Op.getOperand(2);  // source va_list address
+  SDValue Chain = Op.getOperand(0);
+  SDValue DstPtr = Op.getOperand(1); // destination va_list address
+  SDValue SrcPtr = Op.getOperand(2); // source va_list address
   const Value *DstSV = cast<SrcValueSDNode>(Op.getOperand(3))->getValue();
   const Value *SrcSV = cast<SrcValueSDNode>(Op.getOperand(4))->getValue();
 
   // Load the pointer from the source va_list, then store to the destination.
-  SDValue Ptr = DAG.getLoad(MVT::i32, DL, Chain, SrcPtr,
-                             MachinePointerInfo(SrcSV));
+  SDValue Ptr =
+      DAG.getLoad(MVT::i32, DL, Chain, SrcPtr, MachinePointerInfo(SrcSV));
   return DAG.getStore(Ptr.getValue(1), DL, Ptr, DstPtr,
                       MachinePointerInfo(DstSV));
 }
@@ -882,9 +924,9 @@ SDValue S1C33TargetLowering::LowerVACOPY(SDValue Op,
 //   select cond, TrueVal, FalseVal
 // to:
 //   S1C33ISD::SELECT_CC(cond, 0, TrueVal, FalseVal, NE)
-// which expands via EmitInstrWithCustomInserter using a CMP + conditional branch.
-SDValue S1C33TargetLowering::LowerSELECT(SDValue Op,
-                                          SelectionDAG &DAG) const {
+// which expands via EmitInstrWithCustomInserter using a CMP + conditional
+// branch.
+SDValue S1C33TargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SDValue Cond = Op.getOperand(0);
   SDValue TrueVal = Op.getOperand(1);
@@ -895,15 +937,15 @@ SDValue S1C33TargetLowering::LowerSELECT(SDValue Op,
     Cond = DAG.getZExtOrTrunc(Cond, DL, MVT::i32);
 
   SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
-  return DAG.getNode(S1C33ISD::SELECT_CC, DL, Op.getValueType(),
-                     Cond, Zero, TrueVal, FalseVal,
+  return DAG.getNode(S1C33ISD::SELECT_CC, DL, Op.getValueType(), Cond, Zero,
+                     TrueVal, FalseVal,
                      DAG.getConstant(S1C33CC::NE, DL, MVT::i32));
 }
 
 // Lower ISD::SELECT_CC to S1C33ISD::SELECT_CC, which becomes the SELECT pseudo
 // instruction and is expanded via EmitInstrWithCustomInserter.
 SDValue S1C33TargetLowering::LowerSELECT_CC(SDValue Op,
-                                              SelectionDAG &DAG) const {
+                                            SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SDValue LHS = Op.getOperand(0);
   SDValue RHS = Op.getOperand(1);
@@ -912,9 +954,8 @@ SDValue S1C33TargetLowering::LowerSELECT_CC(SDValue Op,
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(4))->get();
 
   S1C33CC::CondCode S1C33CC = convertCondCode(CC);
-  return DAG.getNode(S1C33ISD::SELECT_CC, DL, Op.getValueType(),
-                     LHS, RHS, TrueVal, FalseVal,
-                     DAG.getConstant(S1C33CC, DL, MVT::i32));
+  return DAG.getNode(S1C33ISD::SELECT_CC, DL, Op.getValueType(), LHS, RHS,
+                     TrueVal, FalseVal, DAG.getConstant(S1C33CC, DL, MVT::i32));
 }
 
 //===----------------------------------------------------------------------===//
@@ -947,10 +988,20 @@ S1C33TargetLowering::emitVariableShift(MachineInstr &MI,
   unsigned Opc = MI.getOpcode();
   unsigned ShiftImmOpc, ShiftRegOpc;
   switch (Opc) {
-  case S1C33::VSRL: ShiftImmOpc = S1C33::SRL_ri; ShiftRegOpc = S1C33::SRL_rr; break;
-  case S1C33::VSLL: ShiftImmOpc = S1C33::SLL_ri; ShiftRegOpc = S1C33::SLL_rr; break;
-  case S1C33::VSRA: ShiftImmOpc = S1C33::SRA_ri; ShiftRegOpc = S1C33::SRA_rr; break;
-  default: llvm_unreachable("unexpected variable shift opcode");
+  case S1C33::VSRL:
+    ShiftImmOpc = S1C33::SRL_ri;
+    ShiftRegOpc = S1C33::SRL_rr;
+    break;
+  case S1C33::VSLL:
+    ShiftImmOpc = S1C33::SLL_ri;
+    ShiftRegOpc = S1C33::SLL_rr;
+    break;
+  case S1C33::VSRA:
+    ShiftImmOpc = S1C33::SRA_ri;
+    ShiftRegOpc = S1C33::SRA_rr;
+    break;
+  default:
+    llvm_unreachable("unexpected variable shift opcode");
   }
 
   const S1C33Subtarget &STI = BB->getParent()->getSubtarget<S1C33Subtarget>();
@@ -978,7 +1029,8 @@ S1C33TargetLowering::emitVariableShift(MachineInstr &MI,
                   std::next(MachineBasicBlock::iterator(MI)), BB->end());
   DoneMBB->transferSuccessorsAndUpdatePHIs(BB);
 
-  // BB → LoopMBB (fall-through if amt > 8) and BB → DoneMBB (branch if amt <= 8).
+  // BB → LoopMBB (fall-through if amt > 8) and BB → DoneMBB (branch if amt <=
+  // 8).
   BB->addSuccessor(LoopMBB);
   BB->addSuccessor(DoneMBB);
   // LoopMBB → LoopMBB (loop back) and LoopMBB → DoneMBB (exit).
@@ -997,8 +1049,7 @@ S1C33TargetLowering::emitVariableShift(MachineInstr &MI,
   // the standard hardware convention and keeps the loop bounded; the outer
   // i64 select still discards the bogus partial result.
   Register MaskedAmt = MRI.createVirtualRegister(RC);
-  BuildMI(BB, DL, TII.get(S1C33::AND_ri), MaskedAmt)
-      .addReg(Amt).addImm(31);
+  BuildMI(BB, DL, TII.get(S1C33::AND_ri), MaskedAmt).addReg(Amt).addImm(31);
   Amt = MaskedAmt;
 
   // BB: cmp %amt, 8; jrule DoneMBB
@@ -1012,15 +1063,21 @@ S1C33TargetLowering::emitVariableShift(MachineInstr &MI,
   Register NewAmt = MRI.createVirtualRegister(RC);
 
   BuildMI(LoopMBB, DL, TII.get(TargetOpcode::PHI), LoopVal)
-      .addReg(Val).addMBB(BB)
-      .addReg(ShiftedVal).addMBB(LoopMBB);
+      .addReg(Val)
+      .addMBB(BB)
+      .addReg(ShiftedVal)
+      .addMBB(LoopMBB);
   BuildMI(LoopMBB, DL, TII.get(TargetOpcode::PHI), LoopAmt)
-      .addReg(Amt).addMBB(BB)
-      .addReg(NewAmt).addMBB(LoopMBB);
+      .addReg(Amt)
+      .addMBB(BB)
+      .addReg(NewAmt)
+      .addMBB(LoopMBB);
   BuildMI(LoopMBB, DL, TII.get(ShiftImmOpc), ShiftedVal)
-      .addReg(LoopVal).addImm(8);
+      .addReg(LoopVal)
+      .addImm(8);
   BuildMI(LoopMBB, DL, TII.get(S1C33::SUB_ri), NewAmt)
-      .addReg(LoopAmt).addImm(8);
+      .addReg(LoopAmt)
+      .addImm(8);
   BuildMI(LoopMBB, DL, TII.get(S1C33::CMP_ri)).addReg(NewAmt).addImm(8);
   BuildMI(LoopMBB, DL, TII.get(S1C33::JRUGT)).addMBB(LoopMBB);
 
@@ -1029,17 +1086,22 @@ S1C33TargetLowering::emitVariableShift(MachineInstr &MI,
   Register DoneAmt = MRI.createVirtualRegister(RC);
 
   BuildMI(*DoneMBB, DoneMBB->begin(), DL, TII.get(TargetOpcode::PHI), DoneAmt)
-      .addReg(Amt).addMBB(BB)
-      .addReg(NewAmt).addMBB(LoopMBB);
+      .addReg(Amt)
+      .addMBB(BB)
+      .addReg(NewAmt)
+      .addMBB(LoopMBB);
   BuildMI(*DoneMBB, DoneMBB->begin(), DL, TII.get(TargetOpcode::PHI), DoneVal)
-      .addReg(Val).addMBB(BB)
-      .addReg(ShiftedVal).addMBB(LoopMBB);
+      .addReg(Val)
+      .addMBB(BB)
+      .addReg(ShiftedVal)
+      .addMBB(LoopMBB);
   // Insert the final shift after the PHIs.
   auto InsertPt = DoneMBB->begin();
   while (InsertPt != DoneMBB->end() && InsertPt->isPHI())
     ++InsertPt;
   BuildMI(*DoneMBB, InsertPt, DL, TII.get(ShiftRegOpc), Dst)
-      .addReg(DoneVal).addReg(DoneAmt);
+      .addReg(DoneVal)
+      .addReg(DoneAmt);
 
   MI.eraseFromParent();
   return DoneMBB;
@@ -1056,7 +1118,7 @@ S1C33TargetLowering::emitVariableShift(MachineInstr &MI,
 // Layout: BB, FalseBB, MergeBB (so BB falls through to FalseBB).
 MachineBasicBlock *
 S1C33TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
-                                                  MachineBasicBlock *BB) const {
+                                                 MachineBasicBlock *BB) const {
   unsigned Opc = MI.getOpcode();
   if (Opc == S1C33::VSRL || Opc == S1C33::VSLL || Opc == S1C33::VSRA)
     return emitVariableShift(MI, BB);
@@ -1068,21 +1130,22 @@ S1C33TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
       *static_cast<const S1C33InstrInfo *>(STI.getInstrInfo());
   DebugLoc DL = MI.getDebugLoc();
 
-  Register Dst      = MI.getOperand(0).getReg();
-  Register LHS      = MI.getOperand(1).getReg();
-  Register RHS      = MI.getOperand(2).getReg();
-  Register TrueVal  = MI.getOperand(3).getReg();
+  Register Dst = MI.getOperand(0).getReg();
+  Register LHS = MI.getOperand(1).getReg();
+  Register RHS = MI.getOperand(2).getReg();
+  Register TrueVal = MI.getOperand(3).getReg();
   Register FalseVal = MI.getOperand(4).getReg();
-  unsigned CC       = MI.getOperand(5).getImm();
+  unsigned CC = MI.getOperand(5).getImm();
 
   MachineFunction *MF = BB->getParent();
   MachineBasicBlock *FalseMBB = MF->CreateMachineBasicBlock();
   MachineBasicBlock *MergeMBB = MF->CreateMachineBasicBlock();
 
   // Insert FalseMBB after BB, MergeMBB after FalseMBB.
-  // It points to the block that was originally after BB; both inserts go before It.
+  // It points to the block that was originally after BB; both inserts go before
+  // It.
   MachineFunction::iterator It = ++BB->getIterator();
-  MF->insert(It, FalseMBB);  // BB, FalseMBB, [original next...]
+  MF->insert(It, FalseMBB); // BB, FalseMBB, [original next...]
   MF->insert(It, MergeMBB); // BB, FalseMBB, MergeMBB, [original next...]
 
   // Transfer the tail of BB (after SELECT) and its successors into MergeMBB.
@@ -1108,8 +1171,10 @@ S1C33TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
 
   // MergeBB: PHI Dst = [FalseCopy from FalseMBB, TrueVal from BB].
   BuildMI(*MergeMBB, MergeMBB->begin(), DL, TII.get(TargetOpcode::PHI), Dst)
-      .addReg(FalseCopy).addMBB(FalseMBB)
-      .addReg(TrueVal).addMBB(BB);
+      .addReg(FalseCopy)
+      .addMBB(FalseMBB)
+      .addReg(TrueVal)
+      .addMBB(BB);
 
   MI.eraseFromParent();
   return MergeMBB;
@@ -1120,9 +1185,9 @@ S1C33TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
 // Without this override, CodeGenPrepare would not sink GEPs into loads, but
 // our isel patterns handle (load (add %rb, imm13)) regardless.
 bool S1C33TargetLowering::isLegalAddressingMode(const DataLayout &DL,
-                                                 const AddrMode &AM, Type *Ty,
-                                                 unsigned AS,
-                                                 Instruction *I) const {
+                                                const AddrMode &AM, Type *Ty,
+                                                unsigned AS,
+                                                Instruction *I) const {
   // No scaled-register addressing.
   if (AM.Scale != 0)
     return false;
@@ -1152,9 +1217,8 @@ bool S1C33TargetLowering::isLegalAddressingMode(const DataLayout &DL,
 //   SEXT_INREG(x, i8)  >=  0  →  (x & 0x80) == 0
 // Same for i16 (signbit = 0x8000).
 static bool foldSextInregSignBit(SDValue LHS, SDValue RHS, ISD::CondCode CC,
-                                  SDLoc DL, SelectionDAG &DAG,
-                                  SDValue &OutLHS, SDValue &OutRHS,
-                                  ISD::CondCode &OutCC) {
+                                 SDLoc DL, SelectionDAG &DAG, SDValue &OutLHS,
+                                 SDValue &OutRHS, ISD::CondCode &OutCC) {
   // LHS must be SEXT_INREG of i8 or i16.
   if (LHS.getOpcode() != ISD::SIGN_EXTEND_INREG)
     return false;
@@ -1192,32 +1256,29 @@ static bool foldSextInregSignBit(SDValue LHS, SDValue RHS, ISD::CondCode CC,
   OutLHS = DAG.getNode(ISD::AND, DL, MVT::i32, LHS.getOperand(0),
                        DAG.getConstant(SignBit, DL, MVT::i32));
   OutRHS = DAG.getConstant(0, DL, MVT::i32);
-  OutCC  = NewCC;
+  OutCC = NewCC;
   return true;
 }
 
-SDValue S1C33TargetLowering::combineBRCC(SDNode *N,
-                                          SelectionDAG &DAG) const {
+SDValue S1C33TargetLowering::combineBRCC(SDNode *N, SelectionDAG &DAG) const {
   SDLoc DL(N);
-  ISD::CondCode CC  = cast<CondCodeSDNode>(N->getOperand(1))->get();
-  SDValue LHS       = N->getOperand(2);
-  SDValue RHS       = N->getOperand(3);
+  ISD::CondCode CC = cast<CondCodeSDNode>(N->getOperand(1))->get();
+  SDValue LHS = N->getOperand(2);
+  SDValue RHS = N->getOperand(3);
 
   SDValue NewLHS, NewRHS;
   ISD::CondCode NewCC;
   if (!foldSextInregSignBit(LHS, RHS, CC, DL, DAG, NewLHS, NewRHS, NewCC))
     return SDValue();
 
-  return DAG.getNode(ISD::BR_CC, DL, MVT::Other,
-                     N->getOperand(0), DAG.getCondCode(NewCC),
-                     NewLHS, NewRHS, N->getOperand(4));
+  return DAG.getNode(ISD::BR_CC, DL, MVT::Other, N->getOperand(0),
+                     DAG.getCondCode(NewCC), NewLHS, NewRHS, N->getOperand(4));
 }
 
-SDValue S1C33TargetLowering::combineSETCC(SDNode *N,
-                                           SelectionDAG &DAG) const {
+SDValue S1C33TargetLowering::combineSETCC(SDNode *N, SelectionDAG &DAG) const {
   SDLoc DL(N);
-  SDValue LHS      = N->getOperand(0);
-  SDValue RHS      = N->getOperand(1);
+  SDValue LHS = N->getOperand(0);
+  SDValue RHS = N->getOperand(1);
   ISD::CondCode CC = cast<CondCodeSDNode>(N->getOperand(2))->get();
 
   SDValue NewLHS, NewRHS;
@@ -1245,14 +1306,14 @@ SDValue S1C33TargetLowering::combineSETCC(SDNode *N,
 //   AND: (and (sra x, 31), 2^N - 1)    — after generic simplification
 
 // Helper: emit S1C33ISD::SELECT_CC(x, 0, bias, 0, LT) — target-opaque.
-static SDValue emitBiasSelect(SDValue X, uint64_t Bias,
-                              SDLoc DL, SelectionDAG &DAG) {
+static SDValue emitBiasSelect(SDValue X, uint64_t Bias, SDLoc DL,
+                              SelectionDAG &DAG) {
   EVT VT = X.getValueType();
   SDValue Zero = DAG.getConstant(0, DL, VT);
   SDValue BiasVal = DAG.getConstant(Bias, DL, VT);
   SDValue CCVal = DAG.getConstant(S1C33CC::LT, DL, MVT::i32);
-  return DAG.getNode(S1C33ISD::SELECT_CC, DL, VT,
-                     X, Zero, BiasVal, Zero, CCVal);
+  return DAG.getNode(S1C33ISD::SELECT_CC, DL, VT, X, Zero, BiasVal, Zero,
+                     CCVal);
 }
 
 // Match: (srl (sra x, 31), K) → SELECT_CC bias
@@ -1354,14 +1415,14 @@ static SDValue combineAndSraBias(SDNode *N, SelectionDAG &DAG) {
 
 // Helper: build (shamt == 0) ? zero : val, to avoid undefined shift by 32.
 static SDValue selectIfShAmtZero(SDValue Val, SDValue ShAmt, SDLoc DL,
-                                  SelectionDAG &DAG) {
+                                 SelectionDAG &DAG) {
   SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
   SDValue IsZero = DAG.getSetCC(DL, MVT::i32, ShAmt, Zero, ISD::SETEQ);
   return DAG.getNode(ISD::SELECT, DL, MVT::i32, IsZero, Zero, Val);
 }
 
 SDValue S1C33TargetLowering::LowerSHL_PARTS(SDValue Op,
-                                             SelectionDAG &DAG) const {
+                                            SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SDValue Lo = Op.getOperand(0);
   SDValue Hi = Op.getOperand(1);
@@ -1377,13 +1438,14 @@ SDValue S1C33TargetLowering::LowerSHL_PARTS(SDValue Op,
 
   // Normal case (shamt < 32):
   //   result_lo = lo << shamt
-  //   result_hi = (hi << shamt) | carry, where carry = (lo >> RevShAmt) if shamt!=0 else 0
+  //   result_hi = (hi << shamt) | carry, where carry = (lo >> RevShAmt) if
+  //   shamt!=0 else 0
   SDValue Carry = selectIfShAmtZero(
       DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, RevShAmt), ShAmt, DL, DAG);
   SDValue NormLo = DAG.getNode(ISD::SHL, DL, MVT::i32, Lo, ShAmt);
-  SDValue NormHi = DAG.getNode(ISD::OR, DL, MVT::i32,
-                                DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, ShAmt),
-                                Carry);
+  SDValue NormHi =
+      DAG.getNode(ISD::OR, DL, MVT::i32,
+                  DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, ShAmt), Carry);
 
   // Big case (shamt >= 32):
   //   result_lo = 0
@@ -1392,15 +1454,17 @@ SDValue S1C33TargetLowering::LowerSHL_PARTS(SDValue Op,
 
   // Select between cases: ExtraShAmt < 0 ↔ shamt < 32
   SDValue IsBig = DAG.getSetCC(DL, MVT::i32, ExtraShAmt, Zero, ISD::SETGE);
-  SDValue ResultLo = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, Zero, NormLo);
-  SDValue ResultHi = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, BigHi, NormHi);
+  SDValue ResultLo =
+      DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, Zero, NormLo);
+  SDValue ResultHi =
+      DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, BigHi, NormHi);
 
   SDValue Parts[2] = {ResultLo, ResultHi};
   return DAG.getMergeValues(Parts, DL);
 }
 
 SDValue S1C33TargetLowering::LowerSRL_PARTS(SDValue Op,
-                                             SelectionDAG &DAG) const {
+                                            SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SDValue Lo = Op.getOperand(0);
   SDValue Hi = Op.getOperand(1);
@@ -1413,13 +1477,13 @@ SDValue S1C33TargetLowering::LowerSRL_PARTS(SDValue Op,
   SDValue RevShAmt = DAG.getNode(ISD::SUB, DL, MVT::i32, Bits, ShAmt);
 
   // Normal case (shamt < 32):
-  //   result_lo = (lo >> shamt) | carry, carry = (hi << RevShAmt) if shamt!=0 else 0
-  //   result_hi = hi >> shamt
+  //   result_lo = (lo >> shamt) | carry, carry = (hi << RevShAmt) if shamt!=0
+  //   else 0 result_hi = hi >> shamt
   SDValue Carry = selectIfShAmtZero(
       DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, RevShAmt), ShAmt, DL, DAG);
-  SDValue NormLo = DAG.getNode(ISD::OR, DL, MVT::i32,
-                                DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, ShAmt),
-                                Carry);
+  SDValue NormLo =
+      DAG.getNode(ISD::OR, DL, MVT::i32,
+                  DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, ShAmt), Carry);
   SDValue NormHi = DAG.getNode(ISD::SRL, DL, MVT::i32, Hi, ShAmt);
 
   // Big case (shamt >= 32):
@@ -1428,15 +1492,17 @@ SDValue S1C33TargetLowering::LowerSRL_PARTS(SDValue Op,
   SDValue BigLo = DAG.getNode(ISD::SRL, DL, MVT::i32, Hi, ExtraShAmt);
 
   SDValue IsBig = DAG.getSetCC(DL, MVT::i32, ExtraShAmt, Zero, ISD::SETGE);
-  SDValue ResultLo = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, BigLo, NormLo);
-  SDValue ResultHi = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, Zero, NormHi);
+  SDValue ResultLo =
+      DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, BigLo, NormLo);
+  SDValue ResultHi =
+      DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, Zero, NormHi);
 
   SDValue Parts[2] = {ResultLo, ResultHi};
   return DAG.getMergeValues(Parts, DL);
 }
 
 SDValue S1C33TargetLowering::LowerSRA_PARTS(SDValue Op,
-                                             SelectionDAG &DAG) const {
+                                            SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SDValue Lo = Op.getOperand(0);
   SDValue Hi = Op.getOperand(1);
@@ -1453,13 +1519,13 @@ SDValue S1C33TargetLowering::LowerSRA_PARTS(SDValue Op,
                                  DAG.getConstant(31, DL, MVT::i32));
 
   // Normal case (shamt < 32):
-  //   result_lo = (lo >> shamt) | carry, carry = (hi << RevShAmt) if shamt!=0 else 0
-  //   result_hi = hi >>a shamt
+  //   result_lo = (lo >> shamt) | carry, carry = (hi << RevShAmt) if shamt!=0
+  //   else 0 result_hi = hi >>a shamt
   SDValue Carry = selectIfShAmtZero(
       DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, RevShAmt), ShAmt, DL, DAG);
-  SDValue NormLo = DAG.getNode(ISD::OR, DL, MVT::i32,
-                                DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, ShAmt),
-                                Carry);
+  SDValue NormLo =
+      DAG.getNode(ISD::OR, DL, MVT::i32,
+                  DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, ShAmt), Carry);
   SDValue NormHi = DAG.getNode(ISD::SRA, DL, MVT::i32, Hi, ShAmt);
 
   // Big case (shamt >= 32):
@@ -1468,8 +1534,10 @@ SDValue S1C33TargetLowering::LowerSRA_PARTS(SDValue Op,
   SDValue BigLo = DAG.getNode(ISD::SRA, DL, MVT::i32, Hi, ExtraShAmt);
 
   SDValue IsBig = DAG.getSetCC(DL, MVT::i32, ExtraShAmt, Zero, ISD::SETGE);
-  SDValue ResultLo = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, BigLo, NormLo);
-  SDValue ResultHi = DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, SignWord, NormHi);
+  SDValue ResultLo =
+      DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, BigLo, NormLo);
+  SDValue ResultHi =
+      DAG.getNode(ISD::SELECT, DL, MVT::i32, IsBig, SignWord, NormHi);
 
   SDValue Parts[2] = {ResultLo, ResultHi};
   return DAG.getMergeValues(Parts, DL);
@@ -1477,8 +1545,8 @@ SDValue S1C33TargetLowering::LowerSRA_PARTS(SDValue Op,
 
 std::pair<unsigned, const TargetRegisterClass *>
 S1C33TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
-                                                   StringRef Constraint,
-                                                   MVT VT) const {
+                                                  StringRef Constraint,
+                                                  MVT VT) const {
   if (Constraint.size() == 1) {
     switch (Constraint[0]) {
     case 'r':
@@ -1520,18 +1588,21 @@ static SDValue combineWrapperAddOffset(SDNode *N, SelectionDAG &DAG) {
 }
 
 SDValue S1C33TargetLowering::PerformDAGCombine(SDNode *N,
-                                                DAGCombinerInfo &DCI) const {
+                                               DAGCombinerInfo &DCI) const {
   SelectionDAG &DAG = DCI.DAG;
   switch (N->getOpcode()) {
-  case ISD::BR_CC:  return combineBRCC(N, DAG);
-  case ISD::SETCC:  return combineSETCC(N, DAG);
+  case ISD::BR_CC:
+    return combineBRCC(N, DAG);
+  case ISD::SETCC:
+    return combineSETCC(N, DAG);
   case ISD::SRL:
     return combineSrlSraBias(N, DAG);
   case ISD::AND:
     return combineAndSraBias(N, DAG);
   case ISD::ADD:
     return combineWrapperAddOffset(N, DAG);
-  default:          return SDValue();
+  default:
+    return SDValue();
   }
 }
 
@@ -1550,9 +1621,11 @@ SDValue S1C33TargetLowering::PerformDAGCombine(SDNode *N,
 // These match the CPU Manual §4.3 semantics: `[%rb]+` always bumps rb by the
 // transfer size.  Non-size increments can't be represented.
 //===----------------------------------------------------------------------===//
-bool S1C33TargetLowering::getPostIndexedAddressParts(
-    SDNode *N, SDNode *Op, SDValue &Base, SDValue &Offset,
-    ISD::MemIndexedMode &AM, SelectionDAG &DAG) const {
+bool S1C33TargetLowering::getPostIndexedAddressParts(SDNode *N, SDNode *Op,
+                                                     SDValue &Base,
+                                                     SDValue &Offset,
+                                                     ISD::MemIndexedMode &AM,
+                                                     SelectionDAG &DAG) const {
   if (Op->getOpcode() != ISD::ADD)
     return false;
 
@@ -1570,10 +1643,17 @@ bool S1C33TargetLowering::getPostIndexedAddressParts(
 
   unsigned ExpectedInc;
   switch (MemVT.getSimpleVT().SimpleTy) {
-  case MVT::i8:  ExpectedInc = 1; break;
-  case MVT::i16: ExpectedInc = 2; break;
-  case MVT::i32: ExpectedInc = 4; break;
-  default: return false;
+  case MVT::i8:
+    ExpectedInc = 1;
+    break;
+  case MVT::i16:
+    ExpectedInc = 2;
+    break;
+  case MVT::i32:
+    ExpectedInc = 4;
+    break;
+  default:
+    return false;
   }
 
   auto *RHS = dyn_cast<ConstantSDNode>(Op->getOperand(1));

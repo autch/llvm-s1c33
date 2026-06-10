@@ -49,12 +49,26 @@ public:
     // Unconditional register-indirect
     case S1C33::JP_r:
     // Conditional PC-relative (signed, unsigned, equal, not-equal)
-    case S1C33::JRGT:   case S1C33::JRGE:   case S1C33::JRLT:   case S1C33::JRLE:
-    case S1C33::JRUGT:  case S1C33::JRUGE:  case S1C33::JRULT:  case S1C33::JRULE:
-    case S1C33::JREQ:   case S1C33::JRNE:
-    case S1C33::JRGT_D: case S1C33::JRGE_D: case S1C33::JRLT_D: case S1C33::JRLE_D:
-    case S1C33::JRUGT_D:case S1C33::JRUGE_D:case S1C33::JRULT_D:case S1C33::JRULE_D:
-    case S1C33::JREQ_D: case S1C33::JRNE_D:
+    case S1C33::JRGT:
+    case S1C33::JRGE:
+    case S1C33::JRLT:
+    case S1C33::JRLE:
+    case S1C33::JRUGT:
+    case S1C33::JRUGE:
+    case S1C33::JRULT:
+    case S1C33::JRULE:
+    case S1C33::JREQ:
+    case S1C33::JRNE:
+    case S1C33::JRGT_D:
+    case S1C33::JRGE_D:
+    case S1C33::JRLT_D:
+    case S1C33::JRLE_D:
+    case S1C33::JRUGT_D:
+    case S1C33::JRUGE_D:
+    case S1C33::JRULT_D:
+    case S1C33::JRULE_D:
+    case S1C33::JREQ_D:
+    case S1C33::JRNE_D:
       return true;
     default:
       return false;
@@ -74,12 +88,26 @@ public:
 
   bool isConditionalBranch(const MCInst &Inst) const override {
     switch (Inst.getOpcode()) {
-    case S1C33::JRGT:   case S1C33::JRGE:   case S1C33::JRLT:   case S1C33::JRLE:
-    case S1C33::JRUGT:  case S1C33::JRUGE:  case S1C33::JRULT:  case S1C33::JRULE:
-    case S1C33::JREQ:   case S1C33::JRNE:
-    case S1C33::JRGT_D: case S1C33::JRGE_D: case S1C33::JRLT_D: case S1C33::JRLE_D:
-    case S1C33::JRUGT_D:case S1C33::JRUGE_D:case S1C33::JRULT_D:case S1C33::JRULE_D:
-    case S1C33::JREQ_D: case S1C33::JRNE_D:
+    case S1C33::JRGT:
+    case S1C33::JRGE:
+    case S1C33::JRLT:
+    case S1C33::JRLE:
+    case S1C33::JRUGT:
+    case S1C33::JRUGE:
+    case S1C33::JRULT:
+    case S1C33::JRULE:
+    case S1C33::JREQ:
+    case S1C33::JRNE:
+    case S1C33::JRGT_D:
+    case S1C33::JRGE_D:
+    case S1C33::JRLT_D:
+    case S1C33::JRLE_D:
+    case S1C33::JRUGT_D:
+    case S1C33::JRUGE_D:
+    case S1C33::JRULT_D:
+    case S1C33::JRULE_D:
+    case S1C33::JREQ_D:
+    case S1C33::JRNE_D:
       return true;
     default:
       return false;
@@ -159,7 +187,8 @@ static MCSubtargetInfo *
 createS1C33MCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
   std::string CPUName = std::string(CPU);
   if (CPUName.empty())
-    CPUName = "s1c33209"; // Default to S1C33209 (P/ECE SoC with hardware multiplier)
+    CPUName =
+        "s1c33209"; // Default to S1C33209 (P/ECE SoC with hardware multiplier)
   return createS1C33MCSubtargetInfoImpl(TT, CPUName, /*TuneCPU=*/CPUName, FS);
 }
 
@@ -174,10 +203,10 @@ static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
 }
 
 static MCInstPrinter *createS1C33MCInstPrinter(const Triple & /*T*/,
-                                                unsigned SyntaxVariant,
-                                                const MCAsmInfo &MAI,
-                                                const MCInstrInfo &MII,
-                                                const MCRegisterInfo &MRI) {
+                                               unsigned SyntaxVariant,
+                                               const MCAsmInfo &MAI,
+                                               const MCInstrInfo &MII,
+                                               const MCRegisterInfo &MRI) {
   if (SyntaxVariant == 0)
     return new S1C33InstPrinter(MAI, MII, MRI);
   return nullptr;

@@ -34,25 +34,24 @@ using namespace llvm;
 static InstructionCost getS1C33ImmMatCost(const APInt &Imm) {
   int64_t V = Imm.getSExtValue();
   if (isInt<6>(V))
-    return 1;   // ld.w %rd, imm6
+    return 1; // ld.w %rd, imm6
   if (isInt<19>(V))
-    return 2;   // ext imm13 + ld.w %rd, sign6
-  return 3;     // ext + ext + ld.w %rd, sign6
+    return 2; // ext imm13 + ld.w %rd, sign6
+  return 3;   // ext + ext + ld.w %rd, sign6
 }
 
 InstructionCost
 S1C33TTIImpl::getIntImmCost(const APInt &Imm, Type *Ty,
-                              TTI::TargetCostKind CostKind) const {
+                            TTI::TargetCostKind CostKind) const {
   assert(Ty->isIntegerTy() &&
          "getIntImmCost can only estimate cost of materialising integers");
   return getS1C33ImmMatCost(Imm);
 }
 
-InstructionCost
-S1C33TTIImpl::getIntImmCostInst(unsigned Opcode, unsigned Idx,
-                                  const APInt &Imm, Type *Ty,
-                                  TTI::TargetCostKind CostKind,
-                                  Instruction *Inst) const {
+InstructionCost S1C33TTIImpl::getIntImmCostInst(unsigned Opcode, unsigned Idx,
+                                                const APInt &Imm, Type *Ty,
+                                                TTI::TargetCostKind CostKind,
+                                                Instruction *Inst) const {
   assert(Ty->isIntegerTy() &&
          "getIntImmCost can only estimate cost of materialising integers");
 
@@ -125,8 +124,8 @@ S1C33TTIImpl::getIntImmCostInst(unsigned Opcode, unsigned Idx,
 
 InstructionCost
 S1C33TTIImpl::getIntImmCostIntrin(Intrinsic::ID IID, unsigned Idx,
-                                    const APInt &Imm, Type *Ty,
-                                    TTI::TargetCostKind CostKind) const {
+                                  const APInt &Imm, Type *Ty,
+                                  TTI::TargetCostKind CostKind) const {
   // No intrinsic-specific immediate folding on S1C33 yet — be conservative.
   return TTI::TCC_Free;
 }

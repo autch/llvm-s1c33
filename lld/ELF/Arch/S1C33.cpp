@@ -20,11 +20,14 @@
 //   R_S1C33_REL21 = 6   21-bit PC-rel combined (1×ext + call/branch)
 //   R_S1C33_REL_H = 7   bits[31:22] of byte_offset → ext_h imm13 (SRF split)
 //   R_S1C33_REL_M = 8   bits[21:9]  of byte_offset → ext_m imm13 (SRF split)
-//   R_S1C33_REL_L = 9   bits[8:1]   of byte_offset → call/branch sign8 (SRF split)
+//   R_S1C33_REL_L = 9   bits[8:1]   of byte_offset → call/branch sign8 (SRF
+//   split)
 //                        where byte_offset = target - call_addr (same as REL21)
-//   R_S1C33_REL_AH= 10  bits[25:13] of abs_byte_addr → ext1 imm13 (SRF 2×ext+mem[r8])
-//   R_S1C33_REL_AL= 11  bits[12:0]  of abs_byte_addr → ext2 imm13 (SRF 2×ext+mem[r8])
-//                        abs_byte_addr = absolute byte address of target (S + A)
+//   R_S1C33_REL_AH= 10  bits[25:13] of abs_byte_addr → ext1 imm13 (SRF
+//   2×ext+mem[r8]) R_S1C33_REL_AL= 11  bits[12:0]  of abs_byte_addr → ext2
+//   imm13 (SRF 2×ext+mem[r8])
+//                        abs_byte_addr = absolute byte address of target (S +
+//                        A)
 //
 // For SRF split PC-rel (REL_H/M/L), three relocations patch three consecutive
 // 16-bit instructions at offsets 0/+2/+4 from ext_h.  All three encode the
@@ -134,7 +137,7 @@ int64_t S1C33::getImplicitAddend(const uint8_t *buf, RelType type) const {
     // For the zero-initialised placeholder (extImm = 0) A = 0, which is the
     // common case for LLVM-generated objects.
     uint32_t imm13 = buf[0] | ((buf[1] & 0x1F) << 8);
-    uint8_t  sign8 = buf[2];
+    uint8_t sign8 = buf[2];
     uint32_t raw21 = (imm13 << 8) | sign8;
     int64_t extImm = SignExtend64<21>(raw21);
     return extImm * 2;
@@ -223,15 +226,16 @@ void S1C33::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     checkInt(ctx, loc, extImm, 21, rel);
     uint32_t raw21 = static_cast<uint32_t>(extImm & 0x1FFFFF);
     uint32_t imm13 = (raw21 >> 8) & 0x1FFF;
-    uint8_t  sign8 = static_cast<uint8_t>(raw21 & 0xFF);
-    writeExt13(loc, imm13);     // patch ext word at loc[0..1]
-    loc[2] = sign8;             // patch branch sign8 at loc[2] (byte 0 of branch word)
+    uint8_t sign8 = static_cast<uint8_t>(raw21 & 0xFF);
+    writeExt13(loc, imm13); // patch ext word at loc[0..1]
+    loc[2] = sign8; // patch branch sign8 at loc[2] (byte 0 of branch word)
     break;
   }
 
   case R_S1C33_REL_H: {
     // Three-instruction split PC-rel, ext_h instruction at loc.
-    // byte_offset = target - call_addr = val - 4  (call_addr = P_H+4, val = S-P_H)
+    // byte_offset = target - call_addr = val - 4  (call_addr = P_H+4, val =
+    // S-P_H)
     int64_t byteOff = static_cast<int64_t>(val) - 4;
     // bits[31:22] of byte_offset → ext_h imm13
     uint32_t imm13 = static_cast<uint32_t>((byteOff >> 22) & 0x1FFF);
@@ -253,16 +257,17 @@ void S1C33::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     // call/branch instruction at loc (+4 from ext_h = call_addr).
     // byte_offset = val  (val = S-P_L; P_L = call_addr = P_H+4)
     int64_t byteOff = static_cast<int64_t>(val);
-    // bits[8:1] of byte_offset = bits[7:0] of word_offset → sign8 field (Data[0])
+    // bits[8:1] of byte_offset = bits[7:0] of word_offset → sign8 field
+    // (Data[0])
     loc[0] = static_cast<uint8_t>((byteOff >> 1) & 0xFF);
     break;
   }
 
   case R_S1C33_REL_AH: {
     // First ext of a 2×ext+ld/st[%r8] sequence.
-    // R8=0 in P/ECE, so EA = zero_ext26((ext1<<13)|ext2) = absolute byte address.
-    // val = S + A (absolute byte address of target symbol).
-    // ext1 imm13 = val[25:13]
+    // R8=0 in P/ECE, so EA = zero_ext26((ext1<<13)|ext2) = absolute byte
+    // address. val = S + A (absolute byte address of target symbol). ext1 imm13
+    // = val[25:13]
     uint32_t imm13 = static_cast<uint32_t>((val >> 13) & 0x1FFF);
     writeExt13(loc, imm13);
     break;

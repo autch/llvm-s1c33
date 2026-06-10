@@ -37,8 +37,7 @@ public:
     if (isAggregateTypeForABI(Ty)) {
       // C++ records with non-trivial copy ctors / dtors must be indirect.
       if (CGCXXABI::RecordArgABI RAA = getRecordArgABI(Ty, getCXXABI()))
-        return getNaturalAlignIndirect(Ty,
-                                       getDataLayout().getAllocaAddrSpace(),
+        return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace(),
                                        RAA == CGCXXABI::RAA_DirectInMemory);
 
       // gcc33 quirk: a single-element struct whose element is an integer,
@@ -59,8 +58,7 @@ public:
       }
 
       // Every other struct / union: passed entirely on the stack.
-      return getNaturalAlignIndirect(Ty,
-                                     getDataLayout().getAllocaAddrSpace());
+      return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace());
     }
 
     return DefaultABIInfo::classifyArgumentType(Ty);

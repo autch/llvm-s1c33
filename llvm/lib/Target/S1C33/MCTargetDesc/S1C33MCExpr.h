@@ -1,4 +1,5 @@
-//===-- S1C33MCExpr.h - S1C33 symbol specifier IDs ---------------*- C++ -*-===//
+//===-- S1C33MCExpr.h - S1C33 symbol specifier IDs ---------------*- C++
+//-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -31,9 +32,9 @@ namespace S1C33 {
 /// These are stored in MCSymbolRefExpr::getSpecifier().
 /// Values must be >= MCSymbolRefExpr::FirstTargetSpecifier (= 4).
 enum Specifier : uint32_t {
-  S_ABS_L  = 4, ///< sym@l  — bits[5:0],   sign6 field of ld.w
-  S_ABS_M  = 5, ///< sym@m  — bits[18:6],  imm13 field of ext
-  S_ABS_H  = 6, ///< sym@h  — bits[31:19], imm13 field of ext
+  S_ABS_L = 4, ///< sym@l  — bits[5:0],   sign6 field of ld.w
+  S_ABS_M = 5, ///< sym@m  — bits[18:6],  imm13 field of ext
+  S_ABS_H = 6, ///< sym@h  — bits[31:19], imm13 field of ext
   // 26-bit absolute split, used for `ext sym@ah / ext sym@al / ld.* [%r8]`.
   // Compatible with gcc33's syntax.  'ah/al' is historically named for SRF
   // REL_AH/REL_AL relocations, but the effective semantics is absolute.

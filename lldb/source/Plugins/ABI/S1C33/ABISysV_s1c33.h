@@ -56,7 +56,8 @@ public:
 
   bool RegisterIsVolatile(const lldb_private::RegisterInfo *reg_info) override;
 
-  // The S1C33 address space is 28-bit; any word-aligned address is valid as CFA.
+  // The S1C33 address space is 28-bit; any word-aligned address is valid as
+  // CFA.
   bool CallFrameAddressIsValid(lldb::addr_t cfa) override {
     return cfa != 0 && (cfa & 0x3) == 0;
   }

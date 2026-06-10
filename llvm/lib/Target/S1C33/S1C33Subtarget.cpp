@@ -21,20 +21,19 @@ using namespace llvm;
 #include "S1C33GenSubtargetInfo.inc"
 
 S1C33Subtarget::S1C33Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
-                                  const TargetMachine &TM,
-                                  const TargetOptions &Options,
-                                  CodeModel::Model CM, CodeGenOptLevel OL)
+                               const TargetMachine &TM,
+                               const TargetOptions &Options,
+                               CodeModel::Model CM, CodeGenOptLevel OL)
     : S1C33GenSubtargetInfo(TT, CPU, /*TuneCPU=*/CPU, FS),
-      InstrInfo(initializeSubtargetDependencies(CPU, FS)),
-      FrameLowering(),
-      TLInfo(TM, *this) {
-}
+      InstrInfo(initializeSubtargetDependencies(CPU, FS)), FrameLowering(),
+      TLInfo(TM, *this) {}
 
-S1C33Subtarget &
-S1C33Subtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS) {
+S1C33Subtarget &S1C33Subtarget::initializeSubtargetDependencies(StringRef CPU,
+                                                                StringRef FS) {
   std::string CPUName = std::string(CPU);
   if (CPUName.empty())
-    CPUName = "s1c33209"; // Default to S1C33209 (P/ECE SoC with hardware multiplier)
+    CPUName =
+        "s1c33209"; // Default to S1C33209 (P/ECE SoC with hardware multiplier)
   ParseSubtargetFeatures(CPUName, CPUName, FS);
   return *this;
 }
@@ -48,7 +47,7 @@ void S1C33Subtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
   // call to memcpy().  (RTLIB::MEMCPY is also set on TargetLowering's libcall
   // table in S1C33TargetLowering's constructor for SelectionDAG's own memcpy
   // lowering path; the two tables are separate.)
-  Info.setLibcallImpl(RTLIB::MEMCPY,  RTLIB::impl_memcpy);
+  Info.setLibcallImpl(RTLIB::MEMCPY, RTLIB::impl_memcpy);
   Info.setLibcallImpl(RTLIB::MEMMOVE, RTLIB::impl_memmove);
-  Info.setLibcallImpl(RTLIB::MEMSET,  RTLIB::impl_memset);
+  Info.setLibcallImpl(RTLIB::MEMSET, RTLIB::impl_memset);
 }

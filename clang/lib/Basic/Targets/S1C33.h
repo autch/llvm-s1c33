@@ -39,7 +39,7 @@ public:
     TLSSupported = false;
     LongWidth = LongAlign = 32;
     LongLongWidth = 64;
-    LongLongAlign = 32;    // 64-bit values only need 32-bit alignment on S1C33
+    LongLongAlign = 32; // 64-bit values only need 32-bit alignment on S1C33
     PointerWidth = PointerAlign = 32;
     SuitableAlign = 32;
     SizeType = UnsignedLong;

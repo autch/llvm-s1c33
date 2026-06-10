@@ -1,4 +1,5 @@
-//===-- S1C33MachineFunctionInfo.h - S1C33 Machine Function Info -*- C++ -*-===//
+//===-- S1C33MachineFunctionInfo.h - S1C33 Machine Function Info -*- C++
+//-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -22,7 +23,7 @@ class S1C33MachineFunctionInfo : public MachineFunctionInfo {
 public:
   S1C33MachineFunctionInfo() = default;
   explicit S1C33MachineFunctionInfo(const Function &F,
-                                     const TargetSubtargetInfo *STI) {}
+                                    const TargetSubtargetInfo *STI) {}
 
   MachineFunctionInfo *
   clone(BumpPtrAllocator &Allocator, MachineFunction &DestMF,

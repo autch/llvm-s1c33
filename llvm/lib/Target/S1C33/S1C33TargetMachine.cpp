@@ -7,9 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "S1C33TargetMachine.h"
+#include "S1C33.h"
 #include "S1C33MachineFunctionInfo.h"
 #include "S1C33TargetTransformInfo.h"
-#include "S1C33.h"
 #include "TargetInfo/S1C33TargetInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/Passes.h"
@@ -22,8 +22,7 @@
 
 using namespace llvm;
 
-extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void
-LLVMInitializeS1C33Target() {
+extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeS1C33Target() {
   RegisterTargetMachine<S1C33TargetMachine> X(getTheS1C33Target());
   PassRegistry &PR = *PassRegistry::getPassRegistry();
   initializeS1C33AsmPrinterPass(PR);
@@ -35,14 +34,15 @@ static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
   return RM.value_or(Reloc::Static);
 }
 
-S1C33TargetMachine::S1C33TargetMachine(
-    const Target &T, const Triple &TT, StringRef CPU, StringRef FS,
-    const TargetOptions &Options, std::optional<Reloc::Model> RM,
-    std::optional<CodeModel::Model> CM, CodeGenOptLevel OL, bool JIT)
-    : CodeGenTargetMachineImpl(
-          T, TT.computeDataLayout(), TT, CPU, FS, Options,
-          getEffectiveRelocModel(RM),
-          getEffectiveCodeModel(CM, CodeModel::Small), OL),
+S1C33TargetMachine::S1C33TargetMachine(const Target &T, const Triple &TT,
+                                       StringRef CPU, StringRef FS,
+                                       const TargetOptions &Options,
+                                       std::optional<Reloc::Model> RM,
+                                       std::optional<CodeModel::Model> CM,
+                                       CodeGenOptLevel OL, bool JIT)
+    : CodeGenTargetMachineImpl(T, TT.computeDataLayout(), TT, CPU, FS, Options,
+                               getEffectiveRelocModel(RM),
+                               getEffectiveCodeModel(CM, CodeModel::Small), OL),
       Subtarget(TT, CPU, FS, *this, Options, getCodeModel(), OL),
       TLOF(std::make_unique<TargetLoweringObjectFileELF>()) {
   initAsmInfo();
@@ -66,8 +66,7 @@ public:
 
 } // namespace
 
-TargetPassConfig *
-S1C33TargetMachine::createPassConfig(PassManagerBase &PM) {
+TargetPassConfig *S1C33TargetMachine::createPassConfig(PassManagerBase &PM) {
   return new S1C33PassConfig(*this, PM);
 }
 
@@ -85,7 +84,7 @@ MachineFunctionInfo *S1C33TargetMachine::createMachineFunctionInfo(
     BumpPtrAllocator &Allocator, const Function &F,
     const TargetSubtargetInfo *STI) const {
   return S1C33MachineFunctionInfo::create<S1C33MachineFunctionInfo>(Allocator,
-                                                                     F, STI);
+                                                                    F, STI);
 }
 
 void S1C33PassConfig::addPreRegAlloc() {

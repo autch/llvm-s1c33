@@ -22,11 +22,11 @@ class S1C33TargetMachine : public CodeGenTargetMachineImpl {
 
 public:
   S1C33TargetMachine(const Target &TheTarget, const Triple &TargetTriple,
-                      StringRef Cpu, StringRef FeatureString,
-                      const TargetOptions &Options,
-                      std::optional<Reloc::Model> RM,
-                      std::optional<CodeModel::Model> CodeModel,
-                      CodeGenOptLevel OptLevel, bool JIT);
+                     StringRef Cpu, StringRef FeatureString,
+                     const TargetOptions &Options,
+                     std::optional<Reloc::Model> RM,
+                     std::optional<CodeModel::Model> CodeModel,
+                     CodeGenOptLevel OptLevel, bool JIT);
 
   const S1C33Subtarget *
   getSubtargetImpl(const Function & /*F*/) const override {
@@ -43,7 +43,7 @@ public:
 
   MachineFunctionInfo *
   createMachineFunctionInfo(BumpPtrAllocator &Allocator, const Function &F,
-                             const TargetSubtargetInfo *STI) const override;
+                            const TargetSubtargetInfo *STI) const override;
 };
 
 } // namespace llvm

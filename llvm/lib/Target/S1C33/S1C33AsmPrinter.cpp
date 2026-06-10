@@ -6,9 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/S1C33InstPrinter.h"
 #include "S1C33.h"
 #include "S1C33TargetMachine.h"
-#include "MCTargetDesc/S1C33InstPrinter.h"
 #include "TargetInfo/S1C33TargetInfo.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineInstr.h"
@@ -32,7 +32,7 @@ public:
   static char ID;
 
   explicit S1C33AsmPrinter(TargetMachine &TM,
-                             std::unique_ptr<MCStreamer> Streamer)
+                           std::unique_ptr<MCStreamer> Streamer)
       : AsmPrinter(TM, std::move(Streamer)) {}
 
   StringRef getPassName() const override { return "S1C33 Assembly Printer"; }
@@ -50,8 +50,8 @@ public:
 
 char S1C33AsmPrinter::ID = 0;
 
-INITIALIZE_PASS(S1C33AsmPrinter, "s1c33-asm-printer",
-                "S1C33 Assembly Printer", false, false)
+INITIALIZE_PASS(S1C33AsmPrinter, "s1c33-asm-printer", "S1C33 Assembly Printer",
+                false, false)
 
 // Lower a MachineOperand to an MCOperand for the asm text streamer.
 static MCOperand lowerOperand(const MachineOperand &MO, AsmPrinter &AP) {
@@ -65,8 +65,7 @@ static MCOperand lowerOperand(const MachineOperand &MO, AsmPrinter &AP) {
   case MachineOperand::MO_MachineBasicBlock: {
     // Branch target: emit a reference to the MBB's label symbol.
     MCSymbol *Sym = MO.getMBB()->getSymbol();
-    return MCOperand::createExpr(
-        MCSymbolRefExpr::create(Sym, AP.OutContext));
+    return MCOperand::createExpr(MCSymbolRefExpr::create(Sym, AP.OutContext));
   }
 
   case MachineOperand::MO_GlobalAddress: {
@@ -82,8 +81,7 @@ static MCOperand lowerOperand(const MachineOperand &MO, AsmPrinter &AP) {
 
   case MachineOperand::MO_ExternalSymbol: {
     MCSymbol *Sym = AP.GetExternalSymbolSymbol(MO.getSymbolName());
-    return MCOperand::createExpr(
-        MCSymbolRefExpr::create(Sym, AP.OutContext));
+    return MCOperand::createExpr(MCSymbolRefExpr::create(Sym, AP.OutContext));
   }
 
   case MachineOperand::MO_ConstantPoolIndex: {
@@ -116,7 +114,7 @@ static MCInst lowerToMCInst(const MachineInstr *MI, AsmPrinter &AP) {
 }
 
 void S1C33AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
-                                    raw_ostream &O) {
+                                   raw_ostream &O) {
   const MachineOperand &MO = MI->getOperand(OpNo);
   switch (MO.getType()) {
   case MachineOperand::MO_Register:
@@ -131,7 +129,7 @@ void S1C33AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
 }
 
 bool S1C33AsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
-                                       const char *ExtraCode, raw_ostream &O) {
+                                      const char *ExtraCode, raw_ostream &O) {
   if (ExtraCode && ExtraCode[0])
     return AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, O);
   printOperand(MI, OpNo, O);

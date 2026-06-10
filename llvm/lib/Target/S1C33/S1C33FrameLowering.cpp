@@ -34,15 +34,19 @@ using namespace llvm;
 // Map a callee-saved register to its position in R0–R3.
 // pushn %rN pushes R0..RN, so we need the highest index used.
 static unsigned getCalleeSavedRegIdx(MCPhysReg Reg) {
-  if (Reg == S1C33::R0) return 0;
-  if (Reg == S1C33::R1) return 1;
-  if (Reg == S1C33::R2) return 2;
-  if (Reg == S1C33::R3) return 3;
+  if (Reg == S1C33::R0)
+    return 0;
+  if (Reg == S1C33::R1)
+    return 1;
+  if (Reg == S1C33::R2)
+    return 2;
+  if (Reg == S1C33::R3)
+    return 3;
   llvm_unreachable("unexpected callee-saved register");
 }
 
-static const MCPhysReg CalleeSavedByIdx[] = {
-    S1C33::R0, S1C33::R1, S1C33::R2, S1C33::R3};
+static const MCPhysReg CalleeSavedByIdx[] = {S1C33::R0, S1C33::R1, S1C33::R2,
+                                             S1C33::R3};
 
 // Expand ADJCALLSTACKDOWN/UP pseudo instructions.
 // When hasReservedCallFrame() is true the prologue already includes space for
@@ -74,7 +78,7 @@ MachineBasicBlock::iterator S1C33FrameLowering::eliminateCallFramePseudoInstr(
 //   1. pushn %rN  — save callee-saved registers R0..RN (ABI: R0–R3)
 //   2. sub %sp, FrameSize — allocate local variable space
 void S1C33FrameLowering::emitPrologue(MachineFunction &MF,
-                                       MachineBasicBlock &MBB) const {
+                                      MachineBasicBlock &MBB) const {
   const S1C33Subtarget &STI = MF.getSubtarget<S1C33Subtarget>();
   const S1C33InstrInfo &TII =
       *static_cast<const S1C33InstrInfo *>(STI.getInstrInfo());
@@ -109,8 +113,9 @@ void S1C33FrameLowering::emitPrologue(MachineFunction &MF,
   }
 
   // Allocate local variable space with sub %sp, FrameSize.
-  // StackSize does NOT include callee-saved registers (assignCalleeSavedSpillSlots
-  // returns true, preventing frame slot allocation for callee-saved regs).
+  // StackSize does NOT include callee-saved registers
+  // (assignCalleeSavedSpillSlots returns true, preventing frame slot allocation
+  // for callee-saved regs).
   //
   // S1C33 hardware interprets the imm10 field in word units (×4).
   // gcc33 encodes "sub %sp, 0x8" for 32 bytes (8 words × 4).
@@ -125,8 +130,7 @@ void S1C33FrameLowering::emitPrologue(MachineFunction &MF,
   if (StackSize > 0) {
     uint64_t WordSize = StackSize / 4;
     assert(WordSize <= 1023 && "Stack frame too large for SUBSP_i imm10");
-    BuildMI(MBB, MBBI, DL, TII.get(S1C33::SUBSP_i))
-        .addImm(WordSize);
+    BuildMI(MBB, MBBI, DL, TII.get(S1C33::SUBSP_i)).addImm(WordSize);
   }
 }
 
@@ -134,7 +138,7 @@ void S1C33FrameLowering::emitPrologue(MachineFunction &MF,
 //   1. add %sp, FrameSize — free local variable space
 //   2. popn %rN  — restore callee-saved registers RN..R0 (ABI: R0–R3)
 void S1C33FrameLowering::emitEpilogue(MachineFunction &MF,
-                                       MachineBasicBlock &MBB) const {
+                                      MachineBasicBlock &MBB) const {
   const S1C33Subtarget &STI = MF.getSubtarget<S1C33Subtarget>();
   const S1C33InstrInfo &TII =
       *static_cast<const S1C33InstrInfo *>(STI.getInstrInfo());
@@ -153,13 +157,13 @@ void S1C33FrameLowering::emitEpilogue(MachineFunction &MF,
   if (StackSize > 0) {
     uint64_t WordSize = StackSize / 4;
     assert(WordSize <= 1023 && "Stack frame too large for ADDSP_i imm10");
-    BuildMI(MBB, MBBI, DL, TII.get(S1C33::ADDSP_i))
-        .addImm(WordSize);
+    BuildMI(MBB, MBBI, DL, TII.get(S1C33::ADDSP_i)).addImm(WordSize);
   }
 
   if (IsISR) {
     // Interrupt handler: restore all registers R15–R0 with popn %r15.
-    // reti is already emitted by isel (RETI_FLAG → RETI); insert popn before it.
+    // reti is already emitted by isel (RETI_FLAG → RETI); insert popn before
+    // it.
     BuildMI(MBB, MBBI, DL, TII.get(S1C33::POPN), S1C33::R15);
   } else {
     // Emit popn %rN for callee-saved registers.
@@ -194,7 +198,6 @@ bool S1C33FrameLowering::spillCalleeSavedRegisters(
 // Callee-saved restoring is handled in emitEpilogue via popn.
 bool S1C33FrameLowering::restoreCalleeSavedRegisters(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
-    MutableArrayRef<CalleeSavedInfo> CSI,
-    const TargetRegisterInfo *TRI) const {
+    MutableArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
   return true;
 }

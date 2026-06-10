@@ -75,17 +75,23 @@ char S1C33HoistImmInLoop::ID = 0;
 // this is not a hoistable opcode.
 static unsigned getRegRegOpcode(unsigned PseudoOpc) {
   switch (PseudoOpc) {
-  case S1C33::ADD_rri: return S1C33::ADD_rr;
-  case S1C33::SUB_rri: return S1C33::SUB_rr;
-  case S1C33::AND_rri: return S1C33::AND_rr;
-  case S1C33::OR_rri:  return S1C33::OR_rr;
-  case S1C33::XOR_rri: return S1C33::XOR_rr;
-  default:             return 0;
+  case S1C33::ADD_rri:
+    return S1C33::ADD_rr;
+  case S1C33::SUB_rri:
+    return S1C33::SUB_rr;
+  case S1C33::AND_rri:
+    return S1C33::AND_rr;
+  case S1C33::OR_rri:
+    return S1C33::OR_rr;
+  case S1C33::XOR_rri:
+    return S1C33::XOR_rr;
+  default:
+    return 0;
   }
 }
 
 bool S1C33HoistImmInLoop::processLoop(MachineLoop *L, MachineRegisterInfo &MRI,
-                                       const S1C33InstrInfo &TII) {
+                                      const S1C33InstrInfo &TII) {
   // Process inner loops first so a constant used in both an inner and outer
   // loop gets hoisted to the inner preheader; standard MachineLICM (which
   // already ran) can pull the resulting MOV_ri32 further out if the inner
@@ -151,8 +157,8 @@ bool S1C33HoistImmInLoop::processLoop(MachineLoop *L, MachineRegisterInfo &MRI,
       MI->eraseFromParent();
     }
     Changed = true;
-    LLVM_DEBUG(dbgs() << "S1C33HoistImmInLoop: hoisted imm " << Imm
-                      << " (" << Uses.size() << " uses) from "
+    LLVM_DEBUG(dbgs() << "S1C33HoistImmInLoop: hoisted imm " << Imm << " ("
+                      << Uses.size() << " uses) from "
                       << printMBBReference(*Preheader) << "\n");
   }
 
@@ -163,8 +169,7 @@ bool S1C33HoistImmInLoop::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
-  const S1C33InstrInfo &TII =
-      *MF.getSubtarget<S1C33Subtarget>().getInstrInfo();
+  const S1C33InstrInfo &TII = *MF.getSubtarget<S1C33Subtarget>().getInstrInfo();
   MachineLoopInfo &MLI = getAnalysis<MachineLoopInfoWrapperPass>().getLI();
   MachineRegisterInfo &MRI = MF.getRegInfo();
 

@@ -15,36 +15,34 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/CodeGen/TargetFrameLowering.h"
-#include "llvm/CodeGen/TargetInstrInfo.h"
 
 #define GET_REGINFO_TARGET_DESC
 #include "S1C33GenRegisterInfo.inc"
 
 using namespace llvm;
 
-S1C33RegisterInfo::S1C33RegisterInfo()
-    : S1C33GenRegisterInfo(S1C33::PC) {}
+S1C33RegisterInfo::S1C33RegisterInfo() : S1C33GenRegisterInfo(S1C33::PC) {}
 
 const MCPhysReg *
 S1C33RegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   // ABI (S5U1C33000C): R0–R3 are callee-saved.
-  static const MCPhysReg CalleeSavedRegs[] = {
-      S1C33::R0, S1C33::R1, S1C33::R2, S1C33::R3, 0};
+  static const MCPhysReg CalleeSavedRegs[] = {S1C33::R0, S1C33::R1, S1C33::R2,
+                                              S1C33::R3, 0};
   return CalleeSavedRegs;
 }
 
 const uint32_t *
 S1C33RegisterInfo::getCallPreservedMask(const MachineFunction &MF,
-                                         CallingConv::ID CC) const {
+                                        CallingConv::ID CC) const {
   return CSR_S1C33_RegMask;
 }
 
-BitVector
-S1C33RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
+BitVector S1C33RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
   // R8: kernel table base pointer, always 0x0 per P/ECE calling convention.
   // The kernel sets R8 = 0x0 before calling any app callback; pceapi stubs
@@ -66,8 +64,8 @@ S1C33RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 }
 
 bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
-                                             int SPAdj, unsigned FIOperandNum,
-                                             RegScavenger *RS) const {
+                                            int SPAdj, unsigned FIOperandNum,
+                                            RegScavenger *RS) const {
   MachineInstr &MI = *II;
   MachineBasicBlock &MBB = *MI.getParent();
   MachineFunction &MF = *MI.getMF();
@@ -82,7 +80,8 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   if (MI.getOpcode() == S1C33::ADJFI) {
     Register Dst = MI.getOperand(0).getReg();
     int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
-    int64_t Offset = MFI.getObjectOffset(FrameIndex) + MFI.getStackSize() + SPAdj;
+    int64_t Offset =
+        MFI.getObjectOffset(FrameIndex) + MFI.getStackSize() + SPAdj;
     // Fixed frame objects (incoming stack args, FrameIndex < 0) sit above the
     // frame.  Apply the same adjustments as the standard eliminateFrameIndex
     // path: +4 for the return address pushed by 'call', plus the callee-saved
@@ -97,10 +96,14 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
           unsigned MaxIdx = 0;
           for (const auto &CS : CSI) {
             MCPhysReg Reg = CS.getReg();
-            if (Reg == S1C33::R0)      MaxIdx = std::max(MaxIdx, 0u);
-            else if (Reg == S1C33::R1) MaxIdx = std::max(MaxIdx, 1u);
-            else if (Reg == S1C33::R2) MaxIdx = std::max(MaxIdx, 2u);
-            else if (Reg == S1C33::R3) MaxIdx = std::max(MaxIdx, 3u);
+            if (Reg == S1C33::R0)
+              MaxIdx = std::max(MaxIdx, 0u);
+            else if (Reg == S1C33::R1)
+              MaxIdx = std::max(MaxIdx, 1u);
+            else if (Reg == S1C33::R2)
+              MaxIdx = std::max(MaxIdx, 2u);
+            else if (Reg == S1C33::R3)
+              MaxIdx = std::max(MaxIdx, 3u);
           }
           Offset += (MaxIdx + 1) * 4;
         }
@@ -128,9 +131,7 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   }
 
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
-  int64_t Offset = MFI.getObjectOffset(FrameIndex)
-                   + MFI.getStackSize()
-                   + SPAdj;
+  int64_t Offset = MFI.getObjectOffset(FrameIndex) + MFI.getStackSize() + SPAdj;
 
   // Fixed objects (FrameIndex < 0) are incoming stack arguments sitting above
   // the frame in the caller's space.  The formula above only adds LocalSize;
@@ -150,10 +151,14 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
         unsigned MaxIdx = 0;
         for (const auto &CS : CSI) {
           MCPhysReg Reg = CS.getReg();
-          if (Reg == S1C33::R0)      MaxIdx = std::max(MaxIdx, 0u);
-          else if (Reg == S1C33::R1) MaxIdx = std::max(MaxIdx, 1u);
-          else if (Reg == S1C33::R2) MaxIdx = std::max(MaxIdx, 2u);
-          else if (Reg == S1C33::R3) MaxIdx = std::max(MaxIdx, 3u);
+          if (Reg == S1C33::R0)
+            MaxIdx = std::max(MaxIdx, 0u);
+          else if (Reg == S1C33::R1)
+            MaxIdx = std::max(MaxIdx, 1u);
+          else if (Reg == S1C33::R2)
+            MaxIdx = std::max(MaxIdx, 2u);
+          else if (Reg == S1C33::R3)
+            MaxIdx = std::max(MaxIdx, 3u);
         }
         Offset += (MaxIdx + 1) * 4;
       }
@@ -173,7 +178,8 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     Register Dst = MI.getOperand(0).getReg();
     int64_t ExtraImm = MI.getOperand(2).getImm();
     int64_t TotalOffset = Offset + ExtraImm;
-    assert(TotalOffset >= 0 && "Negative SP-relative offset in ADD_ri FI expansion");
+    assert(TotalOffset >= 0 &&
+           "Negative SP-relative offset in ADD_ri FI expansion");
 
     BuildMI(MBB, II, DL, TII.get(S1C33::LDW_from_SP), Dst);
     if (TotalOffset != 0) {
@@ -198,14 +204,10 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // ChangeToImmediate(Offset) below would produce "ld.ub %rd, [43]" — a raw
   // integer in brackets — which the assembler rejects.
   static const std::pair<unsigned, unsigned> RiToSp[] = {
-      {S1C33::LDB_ri,  S1C33::LDB_sp},
-      {S1C33::LDUB_ri, S1C33::LDUB_sp},
-      {S1C33::LDH_ri,  S1C33::LDH_sp},
-      {S1C33::LDUH_ri, S1C33::LDUH_sp},
-      {S1C33::LDW_ri,  S1C33::LDW_sp},
-      {S1C33::STB_ri,  S1C33::STB_sp},
-      {S1C33::STH_ri,  S1C33::STH_sp},
-      {S1C33::STW_ri,  S1C33::STW_sp},
+      {S1C33::LDB_ri, S1C33::LDB_sp}, {S1C33::LDUB_ri, S1C33::LDUB_sp},
+      {S1C33::LDH_ri, S1C33::LDH_sp}, {S1C33::LDUH_ri, S1C33::LDUH_sp},
+      {S1C33::LDW_ri, S1C33::LDW_sp}, {S1C33::STB_ri, S1C33::STB_sp},
+      {S1C33::STH_ri, S1C33::STH_sp}, {S1C33::STW_ri, S1C33::STW_sp},
   };
   for (auto [Ri, Sp] : RiToSp) {
     if (MI.getOpcode() == Ri) {
@@ -225,14 +227,10 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   //   Loads   (FI at FIOperandNum=1): rd[0], rb[FI=1], off[2] → rd[0], imm[1]
   // In both cases the explicit offset operand is at FIOperandNum+1.
   static const std::pair<unsigned, unsigned> RiOffToSp[] = {
-      {S1C33::LDB_ri_off,  S1C33::LDB_sp},
-      {S1C33::LDUB_ri_off, S1C33::LDUB_sp},
-      {S1C33::LDH_ri_off,  S1C33::LDH_sp},
-      {S1C33::LDUH_ri_off, S1C33::LDUH_sp},
-      {S1C33::LDW_ri_off,  S1C33::LDW_sp},
-      {S1C33::STB_ri_off,  S1C33::STB_sp},
-      {S1C33::STH_ri_off,  S1C33::STH_sp},
-      {S1C33::STW_ri_off,  S1C33::STW_sp},
+      {S1C33::LDB_ri_off, S1C33::LDB_sp}, {S1C33::LDUB_ri_off, S1C33::LDUB_sp},
+      {S1C33::LDH_ri_off, S1C33::LDH_sp}, {S1C33::LDUH_ri_off, S1C33::LDUH_sp},
+      {S1C33::LDW_ri_off, S1C33::LDW_sp}, {S1C33::STB_ri_off, S1C33::STB_sp},
+      {S1C33::STH_ri_off, S1C33::STH_sp}, {S1C33::STW_ri_off, S1C33::STW_sp},
   };
   for (auto [RiOff, Sp] : RiOffToSp) {
     if (MI.getOpcode() == RiOff) {
@@ -254,11 +252,13 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // Determine scale factor from instruction opcode.
   unsigned Scale = 4; // default: word
   switch (MI.getOpcode()) {
-  case S1C33::LDB_sp: case S1C33::LDUB_sp:
+  case S1C33::LDB_sp:
+  case S1C33::LDUB_sp:
   case S1C33::STB_sp:
     Scale = 1;
     break;
-  case S1C33::LDH_sp: case S1C33::LDUH_sp:
+  case S1C33::LDH_sp:
+  case S1C33::LDUH_sp:
   case S1C33::STH_sp:
     Scale = 2;
     break;
@@ -279,7 +279,7 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       int64_t ext_imm13 = (EncodedOffset >> 6) & 0x1FFF;
       BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext_imm13);
     } else {
-      int64_t ext2_imm13 = (EncodedOffset >> 6)  & 0x1FFF;
+      int64_t ext2_imm13 = (EncodedOffset >> 6) & 0x1FFF;
       int64_t ext1_imm13 = (EncodedOffset >> 19) & 0x1FFF;
       BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext1_imm13);
       BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext2_imm13);
@@ -292,8 +292,7 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   return false;
 }
 
-Register
-S1C33RegisterInfo::getFrameRegister(const MachineFunction &MF) const {
+Register S1C33RegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   return S1C33::SP;
 }
 
@@ -370,7 +369,7 @@ bool S1C33RegisterInfo::getRegAllocationHints(
   // calls without spilling; without this hint the greedy allocator picks
   // caller-saved R4-R7/R9 first (per the GR32 alloc order) and is forced
   // to spill the value across each call.
-  for (MCPhysReg P : { S1C33::R0, S1C33::R1, S1C33::R2, S1C33::R3 }) {
+  for (MCPhysReg P : {S1C33::R0, S1C33::R1, S1C33::R2, S1C33::R3}) {
     if (is_contained(Order, P) && !is_contained(Hints, P))
       Hints.push_back(P);
   }

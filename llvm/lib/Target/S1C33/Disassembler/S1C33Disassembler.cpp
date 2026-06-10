@@ -79,14 +79,14 @@ private:
   // (wrong) operand that decodePCRelSimm8Operand already stored.
   // Emits a hex comment to CStream for the extended displacement.
   void applyPendingExtPCRel(MCInst &Inst, uint16_t RawInsn,
-                             raw_ostream &CStream) const;
+                            raw_ostream &CStream) const;
 };
 
 } // end anonymous namespace
 
 static MCDisassembler *createS1C33Disassembler(const Target &T,
-                                                const MCSubtargetInfo &STI,
-                                                MCContext &Ctx) {
+                                               const MCSubtargetInfo &STI,
+                                               MCContext &Ctx) {
   return new S1C33Disassembler(STI, Ctx);
 }
 
@@ -102,15 +102,14 @@ LLVMInitializeS1C33Disassembler() {
 
 // R0–R15: HWEncoding == register index, maps directly to GR32.
 static const unsigned GR32DecoderTable[] = {
-    S1C33::R0,  S1C33::R1,  S1C33::R2,  S1C33::R3,
-    S1C33::R4,  S1C33::R5,  S1C33::R6,  S1C33::R7,
-    S1C33::R8,  S1C33::R9,  S1C33::R10, S1C33::R11,
+    S1C33::R0,  S1C33::R1,  S1C33::R2,  S1C33::R3,  S1C33::R4,  S1C33::R5,
+    S1C33::R6,  S1C33::R7,  S1C33::R8,  S1C33::R9,  S1C33::R10, S1C33::R11,
     S1C33::R12, S1C33::R13, S1C33::R14, S1C33::R15,
 };
 
 static DecodeStatus DecodeGR32RegisterClass(MCInst &Inst, unsigned RegNo,
-                                             uint64_t Address,
-                                             const MCDisassembler *Decoder) {
+                                            uint64_t Address,
+                                            const MCDisassembler *Decoder) {
   if (RegNo >= 16)
     return MCDisassembler::Fail;
   Inst.addOperand(MCOperand::createReg(GR32DecoderTable[RegNo]));
@@ -120,8 +119,8 @@ static DecodeStatus DecodeGR32RegisterClass(MCInst &Inst, unsigned RegNo,
 // 6-bit signed immediate (ld.w sign6, cmp sign6, not sign6).
 // Sign-extends from 6 bits: range -32..31.
 static DecodeStatus decodeSimm6Operand(MCInst &Inst, unsigned Val,
-                                        uint64_t Address,
-                                        const MCDisassembler *Decoder) {
+                                       uint64_t Address,
+                                       const MCDisassembler *Decoder) {
   Inst.addOperand(MCOperand::createImm(SignExtend32<6>(Val)));
   return MCDisassembler::Success;
 }
@@ -129,36 +128,36 @@ static DecodeStatus decodeSimm6Operand(MCInst &Inst, unsigned Val,
 // 6-bit unsigned immediate (add imm6, sub imm6, sp-relative offset).
 // Caller applies sign extension if ext context is present.
 static DecodeStatus decodeUimm6Operand(MCInst &Inst, unsigned Val,
-                                        uint64_t Address,
-                                        const MCDisassembler *Decoder) {
+                                       uint64_t Address,
+                                       const MCDisassembler *Decoder) {
   Inst.addOperand(MCOperand::createImm(Val & 0x3F));
   return MCDisassembler::Success;
 }
 
 // 10-bit unsigned immediate (add/sub %sp, imm10).
 static DecodeStatus decodeUimm10Operand(MCInst &Inst, unsigned Val,
-                                         uint64_t Address,
-                                         const MCDisassembler *Decoder) {
+                                        uint64_t Address,
+                                        const MCDisassembler *Decoder) {
   Inst.addOperand(MCOperand::createImm(Val & 0x3FF));
   return MCDisassembler::Success;
 }
 
 // 13-bit unsigned immediate (ext imm13).
 static DecodeStatus decodeUimm13Operand(MCInst &Inst, unsigned Val,
-                                         uint64_t Address,
-                                         const MCDisassembler *Decoder) {
+                                        uint64_t Address,
+                                        const MCDisassembler *Decoder) {
   Inst.addOperand(MCOperand::createImm(Val & 0x1FFF));
   return MCDisassembler::Success;
 }
 
 // PC-relative 8-bit signed offset: target = Address + 2*sign8.
 static DecodeStatus decodePCRelSimm8Operand(MCInst &Inst, unsigned Val,
-                                             uint64_t Address,
-                                             const MCDisassembler *Decoder) {
+                                            uint64_t Address,
+                                            const MCDisassembler *Decoder) {
   int64_t Sign8 = SignExtend32<8>(Val);
   int64_t Target = (int64_t)Address + 2 * Sign8;
   if (!Decoder->tryAddingSymbolicOperand(Inst, Target, Address,
-                                          /*IsBranch=*/true, 0, 1, 2))
+                                         /*IsBranch=*/true, 0, 1, 2))
     Inst.addOperand(MCOperand::createImm(Sign8));
   return MCDisassembler::Success;
 }
@@ -197,7 +196,7 @@ static std::optional<ExtApplyInfo> getExtApplyInfo(unsigned Opcode) {
   case S1C33::OR_ri:
   case S1C33::XOR_ri:
   case S1C33::NOT_ri:
-  case S1C33::MOV_ri6:   // ld.w %rd, sign6
+  case S1C33::MOV_ri6: // ld.w %rd, sign6
     return ExtApplyInfo{6, /*IsSigned=*/true, /*HasImmOperand=*/true};
 
   // --- Class 3, unsigned 6-bit immediate: ext zero-extends ---
@@ -205,7 +204,8 @@ static std::optional<ExtApplyInfo> getExtApplyInfo(unsigned Opcode) {
   case S1C33::SUB_ri:
     return ExtApplyInfo{6, /*IsSigned=*/false, /*HasImmOperand=*/true};
 
-  // --- Class 2, SP-relative memory, unsigned 6-bit offset: ext zero-extends ---
+  // --- Class 2, SP-relative memory, unsigned 6-bit offset: ext zero-extends
+  // ---
   case S1C33::LDB_sp:
   case S1C33::LDUB_sp:
   case S1C33::LDH_sp:
@@ -259,12 +259,26 @@ static bool isPCRelBranch(unsigned Opcode) {
   case S1C33::JP_D_i:
   case S1C33::CALL_i:
   case S1C33::CALL_D_i:
-  case S1C33::JRGT:   case S1C33::JRGE:   case S1C33::JRLT:   case S1C33::JRLE:
-  case S1C33::JRUGT:  case S1C33::JRUGE:  case S1C33::JRULT:  case S1C33::JRULE:
-  case S1C33::JREQ:   case S1C33::JRNE:
-  case S1C33::JRGT_D: case S1C33::JRGE_D: case S1C33::JRLT_D: case S1C33::JRLE_D:
-  case S1C33::JRUGT_D:case S1C33::JRUGE_D:case S1C33::JRULT_D:case S1C33::JRULE_D:
-  case S1C33::JREQ_D: case S1C33::JRNE_D:
+  case S1C33::JRGT:
+  case S1C33::JRGE:
+  case S1C33::JRLT:
+  case S1C33::JRLE:
+  case S1C33::JRUGT:
+  case S1C33::JRUGE:
+  case S1C33::JRULT:
+  case S1C33::JRULE:
+  case S1C33::JREQ:
+  case S1C33::JRNE:
+  case S1C33::JRGT_D:
+  case S1C33::JRGE_D:
+  case S1C33::JRLT_D:
+  case S1C33::JRLE_D:
+  case S1C33::JRUGT_D:
+  case S1C33::JRUGE_D:
+  case S1C33::JRULT_D:
+  case S1C33::JRULE_D:
+  case S1C33::JREQ_D:
+  case S1C33::JRNE_D:
     return true;
   default:
     return false;
@@ -281,7 +295,7 @@ static void emitExtComment(int64_t Extended, raw_ostream &CStream) {
 }
 
 void S1C33Disassembler::applyPendingExt(MCInst &Inst,
-                                         raw_ostream &CStream) const {
+                                        raw_ostream &CStream) const {
   if (PendingExt.empty())
     return;
 
@@ -345,7 +359,7 @@ void S1C33Disassembler::applyPendingExt(MCInst &Inst,
 }
 
 void S1C33Disassembler::applyPendingExtPCRel(MCInst &Inst, uint16_t RawInsn,
-                                              raw_ostream &CStream) const {
+                                             raw_ostream &CStream) const {
   // The PC-relative displacement lives in bits[7:0] of the instruction word.
   // decodePCRelSimm8Operand already ran with the unextended raw value and may
   // have stored a wrong symbol expression or wrong signed displacement; we
@@ -386,9 +400,9 @@ void S1C33Disassembler::applyPendingExtPCRel(MCInst &Inst, uint16_t RawInsn,
 //===----------------------------------------------------------------------===//
 
 DecodeStatus S1C33Disassembler::getInstruction(MCInst &Instr, uint64_t &Size,
-                                                ArrayRef<uint8_t> Bytes,
-                                                uint64_t Address,
-                                                raw_ostream &CStream) const {
+                                               ArrayRef<uint8_t> Bytes,
+                                               uint64_t Address,
+                                               raw_ostream &CStream) const {
   if (Bytes.size() < 2) {
     Size = 0;
     return MCDisassembler::Fail;
@@ -397,8 +411,8 @@ DecodeStatus S1C33Disassembler::getInstruction(MCInst &Instr, uint64_t &Size,
   // Read 16-bit little-endian instruction word.
   uint16_t Insn = (uint16_t)Bytes[0] | ((uint16_t)Bytes[1] << 8);
 
-  DecodeStatus Result = decodeInstruction(DecoderTable16, Instr,
-                                           Insn, Address, this, STI);
+  DecodeStatus Result =
+      decodeInstruction(DecoderTable16, Instr, Insn, Address, this, STI);
   if (Result == MCDisassembler::Fail) {
     PendingExt.clear();
     Size = 2;

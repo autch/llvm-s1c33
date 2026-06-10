@@ -37,8 +37,8 @@ class S1C33Subtarget : public S1C33GenSubtargetInfo {
 
 public:
   S1C33Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
-                  const TargetMachine &TM, const TargetOptions &Options,
-                  CodeModel::Model CM, CodeGenOptLevel OL);
+                 const TargetMachine &TM, const TargetOptions &Options,
+                 CodeModel::Model CM, CodeGenOptLevel OL);
 
   void ParseSubtargetFeatures(StringRef CPU, StringRef TuneCPU, StringRef FS);
 

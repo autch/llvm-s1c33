@@ -22,21 +22,22 @@ public:
 
   const MCPhysReg *getCalleeSavedRegs(const MachineFunction *MF) const override;
   const uint32_t *getCallPreservedMask(const MachineFunction &MF,
-                                        CallingConv::ID CC) const override;
+                                       CallingConv::ID CC) const override;
 
   BitVector getReservedRegs(const MachineFunction &MF) const override;
 
   bool eliminateFrameIndex(MachineBasicBlock::iterator II, int SPAdj,
-                            unsigned FIOperandNum,
-                            RegScavenger *RS = nullptr) const override;
+                           unsigned FIOperandNum,
+                           RegScavenger *RS = nullptr) const override;
 
   Register getFrameRegister(const MachineFunction &MF) const override;
 
-  bool getRegAllocationHints(Register VirtReg, ArrayRef<MCPhysReg> Order,
-                              SmallVectorImpl<MCPhysReg> &Hints,
-                              const MachineFunction &MF,
-                              const VirtRegMap *VRM = nullptr,
-                              const LiveRegMatrix *Matrix = nullptr) const override;
+  bool
+  getRegAllocationHints(Register VirtReg, ArrayRef<MCPhysReg> Order,
+                        SmallVectorImpl<MCPhysReg> &Hints,
+                        const MachineFunction &MF,
+                        const VirtRegMap *VRM = nullptr,
+                        const LiveRegMatrix *Matrix = nullptr) const override;
 };
 
 } // namespace llvm

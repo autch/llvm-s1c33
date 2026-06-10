@@ -16,8 +16,7 @@ using namespace clang::targets;
 //              R10 return, R12–R15 args)
 const char *const S1C33TargetInfo::GCCRegNames[] = {
     "r0", "r1", "r2",  "r3",  "r4",  "r5",  "r6",  "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
-};
+    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"};
 
 ArrayRef<const char *> S1C33TargetInfo::getGCCRegNames() const {
   return llvm::ArrayRef(GCCRegNames);

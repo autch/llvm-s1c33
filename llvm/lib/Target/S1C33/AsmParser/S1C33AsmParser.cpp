@@ -85,14 +85,14 @@ struct S1C33Operand : public MCParsedAsmOperand {
   }
 
   static std::unique_ptr<S1C33Operand> CreateReg(MCRegister Reg, SMLoc S,
-                                                  SMLoc E) {
+                                                 SMLoc E) {
     auto Op = std::make_unique<S1C33Operand>(k_Register, S, E);
     Op->Reg.Reg = Reg;
     return Op;
   }
 
   static std::unique_ptr<S1C33Operand> CreateImm(const MCExpr *Val, SMLoc S,
-                                                   SMLoc E) {
+                                                 SMLoc E) {
     auto Op = std::make_unique<S1C33Operand>(k_Immediate, S, E);
     Op->Imm.Val = Val;
     return Op;
@@ -127,34 +127,46 @@ struct S1C33Operand : public MCParsedAsmOperand {
 
   // Return the constant value of an immediate operand, or nullopt for symbols.
   std::optional<int64_t> getImmVal() const {
-    if (!isImm()) return std::nullopt;
+    if (!isImm())
+      return std::nullopt;
     const auto *CE = dyn_cast<MCConstantExpr>(Imm.Val);
-    if (!CE) return std::nullopt;  // symbol ref: defer to fixup
+    if (!CE)
+      return std::nullopt; // symbol ref: defer to fixup
     return CE->getValue();
   }
 
   // For non-constant expressions (symbol refs, @l/@m/@h specifiers) the range
   // cannot be checked at parse time — accept and let the fixup handle it.
   // For constant expressions, enforce the field's valid range.
-  bool isUImm6()  const {
-    if (!isImm()) return false;
-    auto V = getImmVal(); return !V || isUInt<6>(*V);
+  bool isUImm6() const {
+    if (!isImm())
+      return false;
+    auto V = getImmVal();
+    return !V || isUInt<6>(*V);
   }
-  bool isSImm6()  const {
-    if (!isImm()) return false;
-    auto V = getImmVal(); return !V || isInt<6>(*V);
+  bool isSImm6() const {
+    if (!isImm())
+      return false;
+    auto V = getImmVal();
+    return !V || isInt<6>(*V);
   }
   bool isUImm10() const {
-    if (!isImm()) return false;
-    auto V = getImmVal(); return !V || isUInt<10>(*V);
+    if (!isImm())
+      return false;
+    auto V = getImmVal();
+    return !V || isUInt<10>(*V);
   }
   bool isUImm13() const {
-    if (!isImm()) return false;
-    auto V = getImmVal(); return !V || isUInt<13>(*V);
+    if (!isImm())
+      return false;
+    auto V = getImmVal();
+    return !V || isUInt<13>(*V);
   }
-  bool isUImm3()  const {
-    if (!isImm()) return false;
-    auto V = getImmVal(); return !V || isUInt<3>(*V);
+  bool isUImm3() const {
+    if (!isImm())
+      return false;
+    auto V = getImmVal();
+    return !V || isUInt<3>(*V);
   }
   // Shift amount: 1..8.  No symbol refs are valid here; always a constant.
   bool isShiftImm8() const {
@@ -216,7 +228,6 @@ public:
   };
 
 private:
-
   // Parse a '%'-prefixed register token and return the MCRegister.
   // Consumes the '%' and the identifier.
   // Returns MCRegister() on failure (does not advance on failure).
@@ -305,13 +316,13 @@ MCRegister S1C33AsmParser::tryParseRegName(SMLoc &StartLoc, SMLoc &EndLoc) {
 }
 
 bool S1C33AsmParser::parseRegister(MCRegister &Reg, SMLoc &StartLoc,
-                                    SMLoc &EndLoc) {
+                                   SMLoc &EndLoc) {
   Reg = tryParseRegName(StartLoc, EndLoc);
   return !Reg;
 }
 
 ParseStatus S1C33AsmParser::tryParseRegister(MCRegister &Reg, SMLoc &StartLoc,
-                                              SMLoc &EndLoc) {
+                                             SMLoc &EndLoc) {
   if (!getLexer().is(AsmToken::Percent))
     return ParseStatus::NoMatch;
   Reg = tryParseRegName(StartLoc, EndLoc);
@@ -366,16 +377,16 @@ bool S1C33AsmParser::parseOperandItem(OperandVector &Operands) {
         // Build a stable string for "%sp+" on the side-channel string pool.
         // We use a static literal; the operand is short-lived.
         static const char SpPlusBuf[] = "%sp+";
-        Operands.push_back(S1C33Operand::CreateToken(
-            StringRef(SpPlusBuf, 4), SpPlusLoc));
+        Operands.push_back(
+            S1C33Operand::CreateToken(StringRef(SpPlusBuf, 4), SpPlusLoc));
         // Parse the immediate offset
         if (parseImmediate(Operands))
           return true;
       } else {
         // [%sp] — no offset
         static const char SpBuf[] = "%sp";
-        Operands.push_back(S1C33Operand::CreateToken(
-            StringRef(SpBuf, 3), PercentLoc));
+        Operands.push_back(
+            S1C33Operand::CreateToken(StringRef(SpBuf, 3), PercentLoc));
       }
     } else {
       // [%rb] register indirect.
@@ -400,7 +411,8 @@ bool S1C33AsmParser::parseOperandItem(OperandVector &Operands) {
       SMLoc PlusLoc = getLexer().getLoc();
       Parser.Lex(); // eat '+'
       static const char PlusBuf[] = "+";
-      Operands.push_back(S1C33Operand::CreateToken(StringRef(PlusBuf, 1), PlusLoc));
+      Operands.push_back(
+          S1C33Operand::CreateToken(StringRef(PlusBuf, 1), PlusLoc));
     }
     return false;
   }
@@ -411,8 +423,7 @@ bool S1C33AsmParser::parseOperandItem(OperandVector &Operands) {
     Parser.Lex(); // eat '%'
 
     if (!getLexer().is(AsmToken::Identifier))
-      return Error(getLexer().getLoc(),
-                   "expected register name after '%'");
+      return Error(getLexer().getLoc(), "expected register name after '%'");
 
     StringRef Name = getLexer().getTok().getString();
     SMLoc NameEnd = getLexer().getTok().getEndLoc();
@@ -420,18 +431,18 @@ bool S1C33AsmParser::parseOperandItem(OperandVector &Operands) {
 
     // Special registers that appear as literal tokens in assembly strings
     // (not as GR32 register operands in the matcher tables).
-    if (Name == "sp" || Name == "alr" || Name == "ahr" ||
-        Name == "psr" || Name == "pc") {
+    if (Name == "sp" || Name == "alr" || Name == "ahr" || Name == "psr" ||
+        Name == "pc") {
       // Build the token string "%sp", "%alr", etc.
       // Store in a side allocation that outlives this call.
       // For short names, use a static table.
-      static const std::string SpecialNames[] = {
-          "%sp", "%alr", "%ahr", "%psr", "%pc"};
+      static const std::string SpecialNames[] = {"%sp", "%alr", "%ahr", "%psr",
+                                                 "%pc"};
       static const StringRef SpecialKeys[] = {"sp", "alr", "ahr", "psr", "pc"};
       for (unsigned I = 0; I < 5; ++I) {
         if (Name == SpecialKeys[I]) {
-          Operands.push_back(S1C33Operand::CreateToken(
-              SpecialNames[I], PercentLoc));
+          Operands.push_back(
+              S1C33Operand::CreateToken(SpecialNames[I], PercentLoc));
           return false;
         }
       }
@@ -454,8 +465,8 @@ bool S1C33AsmParser::parseOperandItem(OperandVector &Operands) {
 //===----------------------------------------------------------------------===//
 
 bool S1C33AsmParser::parseInstruction(ParseInstructionInfo &Info,
-                                       StringRef Name, SMLoc NameLoc,
-                                       OperandVector &Operands) {
+                                      StringRef Name, SMLoc NameLoc,
+                                      OperandVector &Operands) {
   Operands.push_back(S1C33Operand::CreateToken(Name, NameLoc));
 
   if (getLexer().is(AsmToken::EndOfStatement)) {
@@ -489,10 +500,10 @@ bool S1C33AsmParser::parseInstruction(ParseInstructionInfo &Info,
 //===----------------------------------------------------------------------===//
 
 bool S1C33AsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned & /*Opcode*/,
-                                              OperandVector &Operands,
-                                              MCStreamer &Out,
-                                              uint64_t &ErrorInfo,
-                                              bool MatchingInlineAsm) {
+                                             OperandVector &Operands,
+                                             MCStreamer &Out,
+                                             uint64_t &ErrorInfo,
+                                             bool MatchingInlineAsm) {
   MCInst Inst;
   unsigned Result =
       MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm);
@@ -550,7 +561,7 @@ bool S1C33AsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned & /*Opcode*/,
 //===----------------------------------------------------------------------===//
 
 unsigned S1C33AsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp,
-                                                     unsigned Kind) {
+                                                    unsigned Kind) {
   // Allow R8 and R9 to be used as GR32 operands in hand-written assembly.
   // They are excluded from GR32 for register allocation but valid physically.
   S1C33Operand &Op = static_cast<S1C33Operand &>(AsmOp);

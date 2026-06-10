@@ -43,12 +43,12 @@ enum NodeType : unsigned {
 // These must match the numeric values in S1C33InstrInfo.td branch patterns.
 namespace S1C33CC {
 enum CondCode : unsigned {
-  EQ  = 0,
-  NE  = 1,
-  LT  = 2,
-  LE  = 3,
-  GT  = 4,
-  GE  = 5,
+  EQ = 0,
+  NE = 1,
+  LT = 2,
+  LE = 3,
+  GT = 4,
+  GE = 5,
   ULT = 6,
   ULE = 7,
   UGT = 8,
@@ -61,29 +61,29 @@ class S1C33TargetLowering : public TargetLowering {
 
 public:
   explicit S1C33TargetLowering(const TargetMachine &TM,
-                                const S1C33Subtarget &STI);
+                               const S1C33Subtarget &STI);
 
   const char *getTargetNodeName(unsigned Opcode) const override;
 
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
-                                bool IsVarArg,
-                                const SmallVectorImpl<ISD::InputArg> &Ins,
-                                const SDLoc &DL, SelectionDAG &DAG,
-                                SmallVectorImpl<SDValue> &InVals) const override;
+                               bool IsVarArg,
+                               const SmallVectorImpl<ISD::InputArg> &Ins,
+                               const SDLoc &DL, SelectionDAG &DAG,
+                               SmallVectorImpl<SDValue> &InVals) const override;
 
   SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
-                       const SmallVectorImpl<ISD::OutputArg> &Outs,
-                       const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
-                       SelectionDAG &DAG) const override;
+                      const SmallVectorImpl<ISD::OutputArg> &Outs,
+                      const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
+                      SelectionDAG &DAG) const override;
 
   SDValue LowerCall(CallLoweringInfo &CLI,
-                     SmallVectorImpl<SDValue> &InVals) const override;
+                    SmallVectorImpl<SDValue> &InVals) const override;
 
   MachineBasicBlock *
   EmitInstrWithCustomInserter(MachineInstr &MI,
-                               MachineBasicBlock *BB) const override;
+                              MachineBasicBlock *BB) const override;
 
 private:
   MachineBasicBlock *emitVariableShift(MachineInstr &MI,
@@ -103,20 +103,20 @@ private:
   SDValue combineSETCC(SDNode *N, SelectionDAG &DAG) const;
 
 public:
-  bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM,
-                              Type *Ty, unsigned AS,
-                              Instruction *I = nullptr) const override;
+  bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM, Type *Ty,
+                             unsigned AS,
+                             Instruction *I = nullptr) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
   std::pair<unsigned, const TargetRegisterClass *>
   getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
-                                StringRef Constraint, MVT VT) const override;
+                               StringRef Constraint, MVT VT) const override;
 
   // Post-increment indexed addressing: fuse `(load ptr) + (add ptr, size)`
   // into `ld.X %rd, [%rb]+` and the store-side equivalent.
   bool getPostIndexedAddressParts(SDNode *N, SDNode *Op, SDValue &Base,
-                                   SDValue &Offset, ISD::MemIndexedMode &AM,
-                                   SelectionDAG &DAG) const override;
+                                  SDValue &Offset, ISD::MemIndexedMode &AM,
+                                  SelectionDAG &DAG) const override;
 };
 
 } // namespace llvm

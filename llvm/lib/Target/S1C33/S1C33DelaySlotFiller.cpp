@@ -53,9 +53,7 @@ public:
   static char ID;
   S1C33DelaySlotFiller() : MachineFunctionPass(ID) {}
 
-  StringRef getPassName() const override {
-    return "S1C33 Delay Slot Filler";
-  }
+  StringRef getPassName() const override { return "S1C33 Delay Slot Filler"; }
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -69,7 +67,8 @@ private:
   bool hasRegisterHazard(const MachineInstr &Candidate,
                          const MachineInstr &Other,
                          const TargetRegisterInfo &TRI) const;
-  bool hasBranchHazard(const MachineInstr &Candidate, const MachineInstr &Branch,
+  bool hasBranchHazard(const MachineInstr &Candidate,
+                       const MachineInstr &Branch,
                        const TargetRegisterInfo &TRI) const;
 };
 
@@ -88,9 +87,9 @@ static bool readsRegisterSemantically(const MachineInstr &MI, Register Reg,
 
 // Returns true if MI can legally fill a delay slot.
 // Constraints from the CPU manual §4.x and DESIGN_SPEC.md §4.3.
-bool S1C33DelaySlotFiller::isDelaySlotCandidate(
-    const MachineInstr &MI) const {
-  const MachineFunction *MF = MI.getParent() ? MI.getParent()->getParent() : nullptr;
+bool S1C33DelaySlotFiller::isDelaySlotCandidate(const MachineInstr &MI) const {
+  const MachineFunction *MF =
+      MI.getParent() ? MI.getParent()->getParent() : nullptr;
   const TargetRegisterInfo &TRI =
       *MF->getSubtarget<S1C33Subtarget>().getRegisterInfo();
 
@@ -154,22 +153,38 @@ static int getPushPopRangeLastRegIdx(const MachineInstr &MI) {
     return -1;
 
   switch (MI.getOperand(0).getReg()) {
-  case S1C33::R0:  return 0;
-  case S1C33::R1:  return 1;
-  case S1C33::R2:  return 2;
-  case S1C33::R3:  return 3;
-  case S1C33::R4:  return 4;
-  case S1C33::R5:  return 5;
-  case S1C33::R6:  return 6;
-  case S1C33::R7:  return 7;
-  case S1C33::R8:  return 8;
-  case S1C33::R9:  return 9;
-  case S1C33::R10: return 10;
-  case S1C33::R11: return 11;
-  case S1C33::R12: return 12;
-  case S1C33::R13: return 13;
-  case S1C33::R14: return 14;
-  case S1C33::R15: return 15;
+  case S1C33::R0:
+    return 0;
+  case S1C33::R1:
+    return 1;
+  case S1C33::R2:
+    return 2;
+  case S1C33::R3:
+    return 3;
+  case S1C33::R4:
+    return 4;
+  case S1C33::R5:
+    return 5;
+  case S1C33::R6:
+    return 6;
+  case S1C33::R7:
+    return 7;
+  case S1C33::R8:
+    return 8;
+  case S1C33::R9:
+    return 9;
+  case S1C33::R10:
+    return 10;
+  case S1C33::R11:
+    return 11;
+  case S1C33::R12:
+    return 12;
+  case S1C33::R13:
+    return 13;
+  case S1C33::R14:
+    return 14;
+  case S1C33::R15:
+    return 15;
   default:
     return -1;
   }
@@ -177,9 +192,8 @@ static int getPushPopRangeLastRegIdx(const MachineInstr &MI) {
 
 static MCPhysReg getGPRByIdx(unsigned Idx) {
   static constexpr MCPhysReg GPRs[] = {
-      S1C33::R0,  S1C33::R1,  S1C33::R2,  S1C33::R3,
-      S1C33::R4,  S1C33::R5,  S1C33::R6,  S1C33::R7,
-      S1C33::R8,  S1C33::R9,  S1C33::R10, S1C33::R11,
+      S1C33::R0,  S1C33::R1,  S1C33::R2,  S1C33::R3,  S1C33::R4,  S1C33::R5,
+      S1C33::R6,  S1C33::R7,  S1C33::R8,  S1C33::R9,  S1C33::R10, S1C33::R11,
       S1C33::R12, S1C33::R13, S1C33::R14, S1C33::R15,
   };
   assert(Idx < std::size(GPRs) && "invalid GPR index");
@@ -241,9 +255,9 @@ prevNonMetaInstr(MachineBasicBlock &MBB, MachineBasicBlock::iterator I) {
   return MBB.end();
 }
 
-bool S1C33DelaySlotFiller::hasRegisterHazard(const MachineInstr &Candidate,
-                                             const MachineInstr &Other,
-                                             const TargetRegisterInfo &TRI) const {
+bool S1C33DelaySlotFiller::hasRegisterHazard(
+    const MachineInstr &Candidate, const MachineInstr &Other,
+    const TargetRegisterInfo &TRI) const {
   SmallVector<Register, 8> Defs;
   SmallVector<Register, 8> Uses;
 
@@ -271,9 +285,9 @@ bool S1C33DelaySlotFiller::hasRegisterHazard(const MachineInstr &Candidate,
   return false;
 }
 
-bool S1C33DelaySlotFiller::hasBranchHazard(const MachineInstr &Candidate,
-                                           const MachineInstr &Branch,
-                                           const TargetRegisterInfo &TRI) const {
+bool S1C33DelaySlotFiller::hasBranchHazard(
+    const MachineInstr &Candidate, const MachineInstr &Branch,
+    const TargetRegisterInfo &TRI) const {
   switch (Branch.getOpcode()) {
   case S1C33::CALL_r:
   case S1C33::CALL_r_D: {
@@ -297,8 +311,8 @@ S1C33DelaySlotFiller::findDelaySlotCandidate(MachineBasicBlock &MBB,
     auto Ext = prevNonMetaInstr(MBB, Scan);
     bool NeedsExt = Ext != MBB.end() && Ext->getOpcode() == S1C33::EXT;
 
-    bool Safe =
-        !NeedsExt && isDelaySlotCandidate(*Scan) && !hasBranchHazard(*Scan, *I, TRI);
+    bool Safe = !NeedsExt && isDelaySlotCandidate(*Scan) &&
+                !hasBranchHazard(*Scan, *I, TRI);
     if (Safe) {
       for (MachineInstr *Mid : Intervening) {
         if (hasRegisterHazard(*Scan, *Mid, TRI)) {
@@ -366,8 +380,8 @@ bool S1C33DelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
 
   for (MachineBasicBlock &MBB : MF) {
-    for (MachineBasicBlock::iterator I = MBB.begin(), E = MBB.end();
-         I != E; ++I) {
+    for (MachineBasicBlock::iterator I = MBB.begin(), E = MBB.end(); I != E;
+         ++I) {
       unsigned Opc = I->getOpcode();
 
       if (Opc == S1C33::JP_i) {
@@ -375,7 +389,8 @@ bool S1C33DelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
         if (Candidate == MBB.end())
           continue;
         I->setDesc(TII.get(S1C33::JP_D_i));
-        LLVM_DEBUG(dbgs() << "Converting JP_i to JP_D_i in " << MF.getName() << "\n");
+        LLVM_DEBUG(dbgs() << "Converting JP_i to JP_D_i in " << MF.getName()
+                          << "\n");
         fillDelaySlot(MBB, I, Candidate);
         markDelayedBranchInternalReads(*I, *std::next(I), TRI);
         Changed = true;
@@ -396,7 +411,8 @@ bool S1C33DelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
         if (Candidate == MBB.end())
           continue;
         I->setDesc(TII.get(S1C33::RET_D));
-        LLVM_DEBUG(dbgs() << "Converting RET to RET_D in " << MF.getName() << "\n");
+        LLVM_DEBUG(dbgs() << "Converting RET to RET_D in " << MF.getName()
+                          << "\n");
         fillDelaySlot(MBB, I, Candidate);
         markDelayedBranchInternalReads(*I, *std::next(I), TRI);
         Changed = true;
@@ -410,7 +426,8 @@ bool S1C33DelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
         if (Candidate == MBB.end())
           continue;
         I->setDesc(TII.get(S1C33::CALL_r_D));
-        LLVM_DEBUG(dbgs() << "Converting CALL_r to CALL_r_D in " << MF.getName() << "\n");
+        LLVM_DEBUG(dbgs() << "Converting CALL_r to CALL_r_D in " << MF.getName()
+                          << "\n");
         fillDelaySlot(MBB, I, Candidate);
         markDelayedBranchInternalReads(*I, *std::next(I), TRI);
         Changed = true;

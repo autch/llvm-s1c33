@@ -41,15 +41,21 @@
 
 // The ABI is not the primary source of register size/offset/encoding; it just
 // provides the correct DWARF numbers so LLDB can correlate debug info.
-#define DEFINE_GENERIC_REGISTER_STUB(dwarf_num, str_name, generic_num)        \
+#define DEFINE_GENERIC_REGISTER_STUB(dwarf_num, str_name, generic_num)         \
   {                                                                            \
-    DEFINE_REG_NAME(dwarf_num), DEFINE_REG_NAME_STR(str_name), 0, 0,          \
-        eEncodingInvalid, eFormatDefault,                                      \
-        {dwarf_num, dwarf_num, generic_num, LLDB_INVALID_REGNUM, dwarf_num},  \
-        nullptr, nullptr, nullptr,                                             \
+      DEFINE_REG_NAME(dwarf_num),                                              \
+      DEFINE_REG_NAME_STR(str_name),                                           \
+      0,                                                                       \
+      0,                                                                       \
+      eEncodingInvalid,                                                        \
+      eFormatDefault,                                                          \
+      {dwarf_num, dwarf_num, generic_num, LLDB_INVALID_REGNUM, dwarf_num},     \
+      nullptr,                                                                 \
+      nullptr,                                                                 \
+      nullptr,                                                                 \
   }
 
-#define DEFINE_REGISTER_STUB(dwarf_num, str_name)                             \
+#define DEFINE_REGISTER_STUB(dwarf_num, str_name)                              \
   DEFINE_GENERIC_REGISTER_STUB(dwarf_num, str_name, LLDB_INVALID_REGNUM)
 
 using namespace lldb;
@@ -61,46 +67,46 @@ namespace {
 namespace dwarf {
 // DWARF register numbers (must match S1C33RegisterInfo.td DwarfRegNum values).
 enum regnums {
-  r0  = 0,
-  r1  = 1,
-  r2  = 2,
-  r3  = 3,
-  r4  = 4,
-  r5  = 5,
-  r6  = 6,
-  r7  = 7,
-  r8  = 8,  // kernel table base (reserved)
-  r9  = 9,
+  r0 = 0,
+  r1 = 1,
+  r2 = 2,
+  r3 = 3,
+  r4 = 4,
+  r5 = 5,
+  r6 = 6,
+  r7 = 7,
+  r8 = 8, // kernel table base (reserved)
+  r9 = 9,
   r10 = 10, // return value
   r11 = 11, // return value high (64-bit)
   r12 = 12, // arg0
   r13 = 13, // arg1
   r14 = 14, // arg2
   r15 = 15, // arg3
-  sp  = 16,
-  pc  = 17,
+  sp = 16,
+  pc = 17,
   psr = 18,
 };
 
 static const std::array<RegisterInfo, 19> g_register_infos = {{
-    DEFINE_REGISTER_STUB(r0,  "r0"),
-    DEFINE_REGISTER_STUB(r1,  "r1"),
-    DEFINE_REGISTER_STUB(r2,  "r2"),
-    DEFINE_REGISTER_STUB(r3,  "r3"),
-    DEFINE_REGISTER_STUB(r4,  "r4"),
-    DEFINE_REGISTER_STUB(r5,  "r5"),
-    DEFINE_REGISTER_STUB(r6,  "r6"),
-    DEFINE_REGISTER_STUB(r7,  "r7"),
-    DEFINE_REGISTER_STUB(r8,  "r8"),
-    DEFINE_REGISTER_STUB(r9,  "r9"),
+    DEFINE_REGISTER_STUB(r0, "r0"),
+    DEFINE_REGISTER_STUB(r1, "r1"),
+    DEFINE_REGISTER_STUB(r2, "r2"),
+    DEFINE_REGISTER_STUB(r3, "r3"),
+    DEFINE_REGISTER_STUB(r4, "r4"),
+    DEFINE_REGISTER_STUB(r5, "r5"),
+    DEFINE_REGISTER_STUB(r6, "r6"),
+    DEFINE_REGISTER_STUB(r7, "r7"),
+    DEFINE_REGISTER_STUB(r8, "r8"),
+    DEFINE_REGISTER_STUB(r9, "r9"),
     DEFINE_GENERIC_REGISTER_STUB(r10, "r10", LLDB_REGNUM_GENERIC_ARG1),
     DEFINE_REGISTER_STUB(r11, "r11"),
     DEFINE_GENERIC_REGISTER_STUB(r12, "r12", LLDB_REGNUM_GENERIC_ARG2),
     DEFINE_GENERIC_REGISTER_STUB(r13, "r13", LLDB_REGNUM_GENERIC_ARG3),
     DEFINE_GENERIC_REGISTER_STUB(r14, "r14", LLDB_REGNUM_GENERIC_ARG4),
     DEFINE_REGISTER_STUB(r15, "r15"),
-    DEFINE_GENERIC_REGISTER_STUB(sp,  "sp",  LLDB_REGNUM_GENERIC_SP),
-    DEFINE_GENERIC_REGISTER_STUB(pc,  "pc",  LLDB_REGNUM_GENERIC_PC),
+    DEFINE_GENERIC_REGISTER_STUB(sp, "sp", LLDB_REGNUM_GENERIC_SP),
+    DEFINE_GENERIC_REGISTER_STUB(pc, "pc", LLDB_REGNUM_GENERIC_PC),
     DEFINE_REGISTER_STUB(psr, "psr"),
 }};
 } // namespace dwarf
@@ -115,7 +121,8 @@ ABISP ABISysV_s1c33::CreateInstance(ProcessSP process_sp,
                                     const ArchSpec &arch) {
   if (arch.GetTriple().getArch() != llvm::Triple::s1c33)
     return ABISP();
-  return ABISP(new ABISysV_s1c33(std::move(process_sp), MakeMCRegisterInfo(arch)));
+  return ABISP(
+      new ABISysV_s1c33(std::move(process_sp), MakeMCRegisterInfo(arch)));
 }
 
 bool ABISysV_s1c33::PrepareTrivialCall(Thread &thread, addr_t sp,
@@ -126,14 +133,14 @@ bool ABISysV_s1c33::PrepareTrivialCall(Thread &thread, addr_t sp,
   return false;
 }
 
-bool ABISysV_s1c33::GetArgumentValues(Thread &thread,
-                                      ValueList &values) const {
+bool ABISysV_s1c33::GetArgumentValues(Thread &thread, ValueList &values) const {
   return false;
 }
 
 Status ABISysV_s1c33::SetReturnValueObject(StackFrameSP &frame_sp,
                                            ValueObjectSP &new_value) {
-  return Status::FromErrorString("ABISysV_s1c33::SetReturnValueObject not implemented");
+  return Status::FromErrorString(
+      "ABISysV_s1c33::SetReturnValueObject not implemented");
 }
 
 ValueObjectSP

@@ -25,12 +25,11 @@ class MCSubtargetInfo;
 class Target;
 
 MCCodeEmitter *createS1C33MCCodeEmitter(const MCInstrInfo &MCII,
-                                         MCContext &Ctx);
+                                        MCContext &Ctx);
 
-MCAsmBackend *createS1C33AsmBackend(const Target &T,
-                                     const MCSubtargetInfo &STI,
-                                     const MCRegisterInfo &MRI,
-                                     const MCTargetOptions &Options);
+MCAsmBackend *createS1C33AsmBackend(const Target &T, const MCSubtargetInfo &STI,
+                                    const MCRegisterInfo &MRI,
+                                    const MCTargetOptions &Options);
 
 std::unique_ptr<MCObjectTargetWriter> createS1C33ELFObjectWriter(uint8_t OSABI);
 

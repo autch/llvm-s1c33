@@ -36,7 +36,8 @@ public:
         {"fixup_s1c33_pc_rel_8", 0, 8, 0},
         // fixup_s1c33_pc_rel_21:
         //   Covers all 32 bits of the 4-byte ext+branch sequence.
-        //   applyFixup patches ext imm13 (Data[0..1]) and branch sign8 (Data[2]).
+        //   applyFixup patches ext imm13 (Data[0..1]) and branch sign8
+        //   (Data[2]).
         {"fixup_s1c33_pc_rel_21", 0, 32, 0},
         // fixup_s1c33_pc_rel_h/m/l:
         //   Split 32-bit PC-relative ext+ext+branch/call relocation pieces.
@@ -49,9 +50,11 @@ public:
         {"fixup_s1c33_abs_m", 0, 13, 0},
         // fixup_s1c33_abs_l: bits[5:0] of absolute addr → ld.w imm6 field.
         {"fixup_s1c33_abs_l", 4, 6, 0},
-        // fixup_s1c33_abs_ah: bits[25:13] of 26-bit absolute addr → ext_hi imm13.
+        // fixup_s1c33_abs_ah: bits[25:13] of 26-bit absolute addr → ext_hi
+        // imm13.
         {"fixup_s1c33_abs_ah", 0, 13, 0},
-        // fixup_s1c33_abs_al: bits[12:0] of 26-bit absolute addr → ext_lo imm13.
+        // fixup_s1c33_abs_al: bits[12:0] of 26-bit absolute addr → ext_lo
+        // imm13.
         {"fixup_s1c33_abs_al", 0, 13, 0},
     };
     static_assert(std::size(Infos) == S1C33::NumTargetFixupKinds,
@@ -112,9 +115,9 @@ public:
       if (ExtImm < -(1 << 20) || ExtImm > ((1 << 20) - 1))
         Asm->getContext().reportError(Fixup.getLoc(),
                                       "branch target out of ext1 range");
-      uint32_t Raw21  = static_cast<uint32_t>(ExtImm & 0x1FFFFF);
-      uint32_t Imm13  = (Raw21 >> 8) & 0x1FFF;
-      uint8_t  Sign8  = static_cast<uint8_t>(Raw21 & 0xFF);
+      uint32_t Raw21 = static_cast<uint32_t>(ExtImm & 0x1FFFFF);
+      uint32_t Imm13 = (Raw21 >> 8) & 0x1FFF;
+      uint8_t Sign8 = static_cast<uint8_t>(Raw21 & 0xFF);
       // Data is already offset to the start of the ext word.
       // Patch ext word (Data[0..1]):
       //   ext = 0xC000 | imm13  →  LE: [imm13[7:0], 0xC0|(imm13[12:8])]
@@ -159,7 +162,8 @@ public:
       return;
     }
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_l) {
-      // sign6 occupies bits[9:4] of the ld.w word: high nibble of byte 0, low 2 bits of byte 1.
+      // sign6 occupies bits[9:4] of the ld.w word: high nibble of byte 0, low 2
+      // bits of byte 1.
       uint8_t Sign6Raw = static_cast<uint8_t>(Value & 0x3F);
       Data[0] |= static_cast<uint8_t>(Sign6Raw << 4);
       Data[1] |= static_cast<uint8_t>((Sign6Raw >> 4) & 0x03);
@@ -220,28 +224,49 @@ public:
   // assembly that starts at the 4-byte form (`ext N; call ...`).
   static unsigned getRelaxedOpcode(unsigned Op) {
     switch (Op) {
-    case S1C33::JRGT:     return S1C33::JRGT_EXT1;
-    case S1C33::JRGE:     return S1C33::JRGE_EXT1;
-    case S1C33::JRLT:     return S1C33::JRLT_EXT1;
-    case S1C33::JRLE:     return S1C33::JRLE_EXT1;
-    case S1C33::JRUGT:    return S1C33::JRUGT_EXT1;
-    case S1C33::JRUGE:    return S1C33::JRUGE_EXT1;
-    case S1C33::JRULT:    return S1C33::JRULT_EXT1;
-    case S1C33::JRULE:    return S1C33::JRULE_EXT1;
-    case S1C33::JREQ:     return S1C33::JREQ_EXT1;
-    case S1C33::JRNE:     return S1C33::JRNE_EXT1;
-    case S1C33::JP_i:     return S1C33::JP_EXT1;
-    case S1C33::JP_D_i:   return S1C33::JP_D_EXT1;
+    case S1C33::JRGT:
+      return S1C33::JRGT_EXT1;
+    case S1C33::JRGE:
+      return S1C33::JRGE_EXT1;
+    case S1C33::JRLT:
+      return S1C33::JRLT_EXT1;
+    case S1C33::JRLE:
+      return S1C33::JRLE_EXT1;
+    case S1C33::JRUGT:
+      return S1C33::JRUGT_EXT1;
+    case S1C33::JRUGE:
+      return S1C33::JRUGE_EXT1;
+    case S1C33::JRULT:
+      return S1C33::JRULT_EXT1;
+    case S1C33::JRULE:
+      return S1C33::JRULE_EXT1;
+    case S1C33::JREQ:
+      return S1C33::JREQ_EXT1;
+    case S1C33::JRNE:
+      return S1C33::JRNE_EXT1;
+    case S1C33::JP_i:
+      return S1C33::JP_EXT1;
+    case S1C33::JP_D_i:
+      return S1C33::JP_D_EXT1;
     // CALL relaxation skips EXT1 (see comment above).
-    case S1C33::CALL_i:       return S1C33::CALL_EXT2;
-    case S1C33::CALL_D_i:     return S1C33::CALL_D_EXT2;
-    case S1C33::CALL_sym:     return S1C33::CALL_EXT2;
-    case S1C33::CALL_D_sym:   return S1C33::CALL_D_EXT2;
-    case S1C33::CALL_EXT1:    return S1C33::CALL_EXT2;
-    case S1C33::CALL_D_EXT1:  return S1C33::CALL_D_EXT2;
-    case S1C33::LDW_SYM_EXT0: return S1C33::LDW_SYM_EXT2; // direct: 2→6 bytes
-    case S1C33::LDW_SYM_EXT1: return S1C33::LDW_SYM_EXT2;
-    default:                  return Op;
+    case S1C33::CALL_i:
+      return S1C33::CALL_EXT2;
+    case S1C33::CALL_D_i:
+      return S1C33::CALL_D_EXT2;
+    case S1C33::CALL_sym:
+      return S1C33::CALL_EXT2;
+    case S1C33::CALL_D_sym:
+      return S1C33::CALL_D_EXT2;
+    case S1C33::CALL_EXT1:
+      return S1C33::CALL_EXT2;
+    case S1C33::CALL_D_EXT1:
+      return S1C33::CALL_D_EXT2;
+    case S1C33::LDW_SYM_EXT0:
+      return S1C33::LDW_SYM_EXT2; // direct: 2→6 bytes
+    case S1C33::LDW_SYM_EXT1:
+      return S1C33::LDW_SYM_EXT2;
+    default:
+      return Op;
     }
   }
 
@@ -256,7 +281,8 @@ public:
     MCFixupKind Kind = Fixup.getKind();
 
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_pc_rel_8) {
-      if (!Resolved) return true;
+      if (!Resolved)
+        return true;
       int64_t Sign8 = (int64_t)Value / 2;
       return Sign8 < -128 || Sign8 > 127;
     }
@@ -276,7 +302,7 @@ public:
     // that breaks the MCAssembler relaxation loop for small sections.
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_l) {
       if (F.getOpcode() != S1C33::LDW_SYM_EXT0)
-        return false;  // EXT2: no further relaxation
+        return false; // EXT2: no further relaxation
       const MCSymbol *Sym = Target.getAddSym();
       // Any non-absolute symbol's final address is determined by the linker.
       // The section-relative Value here is not the final address.  Always relax
@@ -289,10 +315,10 @@ public:
     // abs_m controls EXT1 → EXT2 relaxation (for EXT1 emitted from assembly).
     if (Kind == (MCFixupKind)S1C33::fixup_s1c33_abs_m) {
       if (F.getOpcode() != S1C33::LDW_SYM_EXT1)
-        return false;  // EXT2: no further relaxation
+        return false; // EXT2: no further relaxation
       const MCSymbol *Sym = Target.getAddSym();
       if (Sym && !Sym->isAbsolute())
-        return true;   // Non-absolute: final address not known, use full form
+        return true; // Non-absolute: final address not known, use full form
       return !isInt<19>((int64_t)Value);
     }
 
@@ -324,10 +350,9 @@ public:
 
 namespace llvm {
 
-MCAsmBackend *createS1C33AsmBackend(const Target &T,
-                                     const MCSubtargetInfo &STI,
-                                     const MCRegisterInfo &MRI,
-                                     const MCTargetOptions &Options) {
+MCAsmBackend *createS1C33AsmBackend(const Target &T, const MCSubtargetInfo &STI,
+                                    const MCRegisterInfo &MRI,
+                                    const MCTargetOptions &Options) {
   return new S1C33AsmBackend();
 }
 

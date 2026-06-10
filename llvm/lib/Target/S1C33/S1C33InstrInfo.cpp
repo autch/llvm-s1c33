@@ -25,11 +25,10 @@ S1C33InstrInfo::S1C33InstrInfo(const S1C33Subtarget &STI)
                         /*CFDestroyOpcode=*/S1C33::ADJCALLSTACKUP) {}
 
 void S1C33InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
-                                  MachineBasicBlock::iterator I,
-                                  const DebugLoc &DL, Register DestReg,
-                                  Register SrcReg, bool KillSrc,
-                                  bool RenamableDest,
-                                  bool RenamableSrc) const {
+                                 MachineBasicBlock::iterator I,
+                                 const DebugLoc &DL, Register DestReg,
+                                 Register SrcReg, bool KillSrc,
+                                 bool RenamableDest, bool RenamableSrc) const {
   // SP is a special register — use CLASS 5 transfers instead of CLASS 1 MOV.
   if (SrcReg == S1C33::SP) {
     // ld.w %rd, %sp — CLASS 5 special register read
@@ -77,7 +76,7 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     // after mlt.w with no NOPs.  Inserting explicit NOPs is harmful: the gap
     // creates a window where interrupts (e.g. DMA for sound playback) can
     // fire and clobber ALR/AHR, producing garbage multiply results.
-    Register Rd  = MI.getOperand(0).getReg();
+    Register Rd = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();
     BuildMI(MBB, MI, DL, get(S1C33::MLT_W)).addReg(Rs2).addReg(Rs1);
@@ -89,7 +88,7 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   case S1C33::MUL16U_r: {
     // Expand: mltu.h %rs2, %rs1 + ld.w %rd, %alr
     // Pipeline interlocks on ALR read; no NOP needed (see MUL_r comment).
-    Register Rd  = MI.getOperand(0).getReg();
+    Register Rd = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();
     BuildMI(MBB, MI, DL, get(S1C33::MLTU_H)).addReg(Rs2).addReg(Rs1);
@@ -101,7 +100,7 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   case S1C33::MUL16S_r: {
     // Expand: mlt.h %rs2, %rs1 + ld.w %rd, %alr
     // Pipeline interlocks on ALR read; no NOP needed (see MUL_r comment).
-    Register Rd  = MI.getOperand(0).getReg();
+    Register Rd = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();
     BuildMI(MBB, MI, DL, get(S1C33::MLT_H)).addReg(Rs2).addReg(Rs1);
@@ -113,7 +112,7 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   case S1C33::MULHS_r: {
     // Expand: mlt.w %rs2, %rs1 + ld.w %rd, %ahr
     // Pipeline interlocks on AHR read; no NOP needed (see MUL_r comment).
-    Register Rd  = MI.getOperand(0).getReg();
+    Register Rd = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();
     BuildMI(MBB, MI, DL, get(S1C33::MLT_W)).addReg(Rs2).addReg(Rs1);
@@ -125,7 +124,7 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   case S1C33::MULHU_r: {
     // Expand: mltu.w %rs2, %rs1 + ld.w %rd, %ahr
     // Pipeline interlocks on AHR read; no NOP needed (see MUL_r comment).
-    Register Rd  = MI.getOperand(0).getReg();
+    Register Rd = MI.getOperand(0).getReg();
     Register Rs1 = MI.getOperand(1).getReg();
     Register Rs2 = MI.getOperand(2).getReg();
     BuildMI(MBB, MI, DL, get(S1C33::MLTU_W)).addReg(Rs2).addReg(Rs1);
@@ -134,16 +133,18 @@ bool S1C33InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
 
-  // MOV_ri32, ALU_ri32, LDx_ri_off, STx_ri_off are expanded in
-  // S1C33ExpandExtPseudos (addPreEmitPass) so that ext+target pairs
-  // are not split by the post-RA scheduler.
+    // MOV_ri32, ALU_ri32, LDx_ri_off, STx_ri_off are expanded in
+    // S1C33ExpandExtPseudos (addPreEmitPass) so that ext+target pairs
+    // are not split by the post-RA scheduler.
   }
 }
 
-void S1C33InstrInfo::loadRegFromStackSlot(
-    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI, Register DestReg,
-    int FrameIndex, const TargetRegisterClass *RC, Register VReg,
-    unsigned SubReg, MachineInstr::MIFlag Flags) const {
+void S1C33InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
+                                          MachineBasicBlock::iterator MBBI,
+                                          Register DestReg, int FrameIndex,
+                                          const TargetRegisterClass *RC,
+                                          Register VReg, unsigned SubReg,
+                                          MachineInstr::MIFlag Flags) const {
   DebugLoc DL;
   if (MBBI != MBB.end())
     DL = MBBI->getDebugLoc();
@@ -159,16 +160,26 @@ void S1C33InstrInfo::loadRegFromStackSlot(
 
 static bool isCondBranchOpcode(unsigned Opc) {
   switch (Opc) {
-  case S1C33::JREQ:      case S1C33::JRNE:
-  case S1C33::JRLT:      case S1C33::JRLE:
-  case S1C33::JRGT:      case S1C33::JRGE:
-  case S1C33::JRULT:     case S1C33::JRULE:
-  case S1C33::JRUGT:     case S1C33::JRUGE:
-  case S1C33::JREQ_EXT1: case S1C33::JRNE_EXT1:
-  case S1C33::JRLT_EXT1: case S1C33::JRLE_EXT1:
-  case S1C33::JRGT_EXT1: case S1C33::JRGE_EXT1:
-  case S1C33::JRULT_EXT1: case S1C33::JRULE_EXT1:
-  case S1C33::JRUGT_EXT1: case S1C33::JRUGE_EXT1:
+  case S1C33::JREQ:
+  case S1C33::JRNE:
+  case S1C33::JRLT:
+  case S1C33::JRLE:
+  case S1C33::JRGT:
+  case S1C33::JRGE:
+  case S1C33::JRULT:
+  case S1C33::JRULE:
+  case S1C33::JRUGT:
+  case S1C33::JRUGE:
+  case S1C33::JREQ_EXT1:
+  case S1C33::JRNE_EXT1:
+  case S1C33::JRLT_EXT1:
+  case S1C33::JRLE_EXT1:
+  case S1C33::JRGT_EXT1:
+  case S1C33::JRGE_EXT1:
+  case S1C33::JRULT_EXT1:
+  case S1C33::JRULE_EXT1:
+  case S1C33::JRUGT_EXT1:
+  case S1C33::JRUGE_EXT1:
     return true;
   default:
     return false;
@@ -176,24 +187,35 @@ static bool isCondBranchOpcode(unsigned Opc) {
 }
 
 static bool isUncondBranchOpcode(unsigned Opc) {
-  return Opc == S1C33::JP_i || Opc == S1C33::JP_EXT1 ||
-         Opc == S1C33::JP_D_i || Opc == S1C33::JP_D_EXT1;
+  return Opc == S1C33::JP_i || Opc == S1C33::JP_EXT1 || Opc == S1C33::JP_D_i ||
+         Opc == S1C33::JP_D_EXT1;
 }
 
 // Normalize EXT1 variants to their base opcode for Cond[] storage.
 static unsigned normalizeCondBrOpc(unsigned Opc) {
   switch (Opc) {
-  case S1C33::JREQ_EXT1:  return S1C33::JREQ;
-  case S1C33::JRNE_EXT1:  return S1C33::JRNE;
-  case S1C33::JRLT_EXT1:  return S1C33::JRLT;
-  case S1C33::JRLE_EXT1:  return S1C33::JRLE;
-  case S1C33::JRGT_EXT1:  return S1C33::JRGT;
-  case S1C33::JRGE_EXT1:  return S1C33::JRGE;
-  case S1C33::JRULT_EXT1: return S1C33::JRULT;
-  case S1C33::JRULE_EXT1: return S1C33::JRULE;
-  case S1C33::JRUGT_EXT1: return S1C33::JRUGT;
-  case S1C33::JRUGE_EXT1: return S1C33::JRUGE;
-  default:                 return Opc;
+  case S1C33::JREQ_EXT1:
+    return S1C33::JREQ;
+  case S1C33::JRNE_EXT1:
+    return S1C33::JRNE;
+  case S1C33::JRLT_EXT1:
+    return S1C33::JRLT;
+  case S1C33::JRLE_EXT1:
+    return S1C33::JRLE;
+  case S1C33::JRGT_EXT1:
+    return S1C33::JRGT;
+  case S1C33::JRGE_EXT1:
+    return S1C33::JRGE;
+  case S1C33::JRULT_EXT1:
+    return S1C33::JRULT;
+  case S1C33::JRULE_EXT1:
+    return S1C33::JRULE;
+  case S1C33::JRUGT_EXT1:
+    return S1C33::JRUGT;
+  case S1C33::JRUGE_EXT1:
+    return S1C33::JRUGE;
+  default:
+    return Opc;
   }
 }
 
@@ -203,11 +225,16 @@ static bool isBranchExt1(unsigned Opc) {
   switch (Opc) {
   case S1C33::JP_EXT1:
   case S1C33::JP_D_EXT1:
-  case S1C33::JREQ_EXT1: case S1C33::JRNE_EXT1:
-  case S1C33::JRLT_EXT1: case S1C33::JRLE_EXT1:
-  case S1C33::JRGT_EXT1: case S1C33::JRGE_EXT1:
-  case S1C33::JRULT_EXT1: case S1C33::JRULE_EXT1:
-  case S1C33::JRUGT_EXT1: case S1C33::JRUGE_EXT1:
+  case S1C33::JREQ_EXT1:
+  case S1C33::JRNE_EXT1:
+  case S1C33::JRLT_EXT1:
+  case S1C33::JRLE_EXT1:
+  case S1C33::JRGT_EXT1:
+  case S1C33::JRGE_EXT1:
+  case S1C33::JRULT_EXT1:
+  case S1C33::JRULE_EXT1:
+  case S1C33::JRUGT_EXT1:
+  case S1C33::JRUGE_EXT1:
     return true;
   default:
     return false;
@@ -215,10 +242,10 @@ static bool isBranchExt1(unsigned Opc) {
 }
 
 bool S1C33InstrInfo::analyzeBranch(MachineBasicBlock &MBB,
-                                    MachineBasicBlock *&TBB,
-                                    MachineBasicBlock *&FBB,
-                                    SmallVectorImpl<MachineOperand> &Cond,
-                                    bool AllowModify) const {
+                                   MachineBasicBlock *&TBB,
+                                   MachineBasicBlock *&FBB,
+                                   SmallVectorImpl<MachineOperand> &Cond,
+                                   bool AllowModify) const {
   TBB = FBB = nullptr;
   Cond.clear();
 
@@ -262,14 +289,16 @@ bool S1C33InstrInfo::analyzeBranch(MachineBasicBlock &MBB,
     // Pattern: JRcc target / JP fallthrough
     FBB = TBB;
     TBB = J->getOperand(0).getMBB();
-    Cond.push_back(MachineOperand::CreateImm(normalizeCondBrOpc(J->getOpcode())));
+    Cond.push_back(
+        MachineOperand::CreateImm(normalizeCondBrOpc(J->getOpcode())));
     return false;
   }
 
   // Case 2: Last terminator is a conditional branch (fallthrough is implicit).
   if (isCondBranchOpcode(I->getOpcode())) {
     TBB = I->getOperand(0).getMBB();
-    Cond.push_back(MachineOperand::CreateImm(normalizeCondBrOpc(I->getOpcode())));
+    Cond.push_back(
+        MachineOperand::CreateImm(normalizeCondBrOpc(I->getOpcode())));
     return false;
   }
 
@@ -277,7 +306,7 @@ bool S1C33InstrInfo::analyzeBranch(MachineBasicBlock &MBB,
 }
 
 unsigned S1C33InstrInfo::removeBranch(MachineBasicBlock &MBB,
-                                       int *BytesRemoved) const {
+                                      int *BytesRemoved) const {
   MachineBasicBlock::iterator I = MBB.end();
   unsigned Count = 0;
   if (BytesRemoved)
@@ -300,12 +329,9 @@ unsigned S1C33InstrInfo::removeBranch(MachineBasicBlock &MBB,
   return Count;
 }
 
-unsigned S1C33InstrInfo::insertBranch(MachineBasicBlock &MBB,
-                                       MachineBasicBlock *TBB,
-                                       MachineBasicBlock *FBB,
-                                       ArrayRef<MachineOperand> Cond,
-                                       const DebugLoc &DL,
-                                       int *BytesAdded) const {
+unsigned S1C33InstrInfo::insertBranch(
+    MachineBasicBlock &MBB, MachineBasicBlock *TBB, MachineBasicBlock *FBB,
+    ArrayRef<MachineOperand> Cond, const DebugLoc &DL, int *BytesAdded) const {
   assert(TBB && "insertBranch must not be told to insert a fallthrough");
   assert(Cond.size() <= 1 && "S1C33 branch conditions have at most 1 operand");
 
@@ -342,16 +368,36 @@ bool S1C33InstrInfo::reverseBranchCondition(
   unsigned Opc = Cond[0].getImm();
   unsigned NewOpc;
   switch (Opc) {
-  case S1C33::JREQ:  NewOpc = S1C33::JRNE;  break;
-  case S1C33::JRNE:  NewOpc = S1C33::JREQ;  break;
-  case S1C33::JRLT:  NewOpc = S1C33::JRGE;  break;
-  case S1C33::JRGE:  NewOpc = S1C33::JRLT;  break;
-  case S1C33::JRLE:  NewOpc = S1C33::JRGT;  break;
-  case S1C33::JRGT:  NewOpc = S1C33::JRLE;  break;
-  case S1C33::JRULT: NewOpc = S1C33::JRUGE; break;
-  case S1C33::JRUGE: NewOpc = S1C33::JRULT; break;
-  case S1C33::JRULE: NewOpc = S1C33::JRUGT; break;
-  case S1C33::JRUGT: NewOpc = S1C33::JRULE; break;
+  case S1C33::JREQ:
+    NewOpc = S1C33::JRNE;
+    break;
+  case S1C33::JRNE:
+    NewOpc = S1C33::JREQ;
+    break;
+  case S1C33::JRLT:
+    NewOpc = S1C33::JRGE;
+    break;
+  case S1C33::JRGE:
+    NewOpc = S1C33::JRLT;
+    break;
+  case S1C33::JRLE:
+    NewOpc = S1C33::JRGT;
+    break;
+  case S1C33::JRGT:
+    NewOpc = S1C33::JRLE;
+    break;
+  case S1C33::JRULT:
+    NewOpc = S1C33::JRUGE;
+    break;
+  case S1C33::JRUGE:
+    NewOpc = S1C33::JRULT;
+    break;
+  case S1C33::JRULE:
+    NewOpc = S1C33::JRUGT;
+    break;
+  case S1C33::JRUGT:
+    NewOpc = S1C33::JRULE;
+    break;
   default:
     return true; // Cannot reverse.
   }

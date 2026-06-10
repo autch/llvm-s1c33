@@ -26,8 +26,7 @@ public:
   // Expand ADJCALLSTACKDOWN/UP to sub/add %sp when stack-passed args exist.
   // For register-only calls the size is 0 and the pseudos are just removed.
   MachineBasicBlock::iterator
-  eliminateCallFramePseudoInstr(MachineFunction &MF,
-                                MachineBasicBlock &MBB,
+  eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator MI) const override;
 
   // S1C33 does not use a frame pointer — SP-based addressing only.
@@ -35,21 +34,24 @@ public:
 
   // pushn/popn handle callee-saved registers; tell LLVM not to allocate
   // frame slots for them (which would cause double-counting with pushn).
-  bool assignCalleeSavedSpillSlots(MachineFunction &MF,
-                                   const TargetRegisterInfo *TRI,
-                                   std::vector<CalleeSavedInfo> &CSI) const override;
+  bool
+  assignCalleeSavedSpillSlots(MachineFunction &MF,
+                              const TargetRegisterInfo *TRI,
+                              std::vector<CalleeSavedInfo> &CSI) const override;
 
   // Callee-saved spilling/restoring is done in emitPrologue/emitEpilogue via
-  // pushn/popn; these overrides suppress the default individual-store mechanism.
+  // pushn/popn; these overrides suppress the default individual-store
+  // mechanism.
   bool spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator MI,
                                  ArrayRef<CalleeSavedInfo> CSI,
                                  const TargetRegisterInfo *TRI) const override;
 
-  bool restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
-                                   MachineBasicBlock::iterator MI,
-                                   MutableArrayRef<CalleeSavedInfo> CSI,
-                                   const TargetRegisterInfo *TRI) const override;
+  bool
+  restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator MI,
+                              MutableArrayRef<CalleeSavedInfo> CSI,
+                              const TargetRegisterInfo *TRI) const override;
 };
 
 } // namespace llvm

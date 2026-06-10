@@ -814,6 +814,36 @@ let hasSideEffects = 0, mayStore = 1, SchedRW = [WriteALU] in {
       [(store         GR32:$rs, (add GR32:$rb, immZExt13:$off))]>;
 }
 
+// SP-relative load/store whose byte displacement exceeds the scaled-imm6
+// encoding of the Class 2 instructions.  Created only by
+// eliminateFrameIndex (never selected).  The full byte offset rides inside
+// one pseudo so the eventual ext+instruction pair stays fused while the
+// post-RA scheduler runs — a bare EXT emitted at PEI time has no
+// dependency edges and could be separated from its target.
+// ExpandExtPseudos splits the pseudo into one or two EXT prefixes plus the
+// real *_sp instruction after all scheduling.  $off is an unsigned raw
+// byte displacement (NOT scaled, unlike the plain *_sp imm6 field).
+let hasSideEffects = 0, mayLoad = 1, SchedRW = [WriteLd] in {
+  def LDB_sp_off  : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$off),
+      "# ld.b\t$rd, [%sp+$off]", []>;
+  def LDUB_sp_off : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$off),
+      "# ld.ub\t$rd, [%sp+$off]", []>;
+  def LDH_sp_off  : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$off),
+      "# ld.h\t$rd, [%sp+$off]", []>;
+  def LDUH_sp_off : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$off),
+      "# ld.uh\t$rd, [%sp+$off]", []>;
+  def LDW_sp_off  : S1C33Pseudo<(outs GR32:$rd), (ins i32imm:$off),
+      "# ld.w\t$rd, [%sp+$off]", []>;
+}
+let hasSideEffects = 0, mayStore = 1, SchedRW = [WriteALU] in {
+  def STB_sp_off  : S1C33Pseudo<(outs), (ins i32imm:$off, GR32:$rs),
+      "# ld.b\t[%sp+$off], $rs", []>;
+  def STH_sp_off  : S1C33Pseudo<(outs), (ins i32imm:$off, GR32:$rs),
+      "# ld.h\t[%sp+$off], $rs", []>;
+  def STW_sp_off  : S1C33Pseudo<(outs), (ins i32imm:$off, GR32:$rs),
+      "# ld.w\t[%sp+$off], $rs", []>;
+}
+
 //===----------------------------------------------------------------------===//
 // CLASS 1 — Register-register ALU
 //

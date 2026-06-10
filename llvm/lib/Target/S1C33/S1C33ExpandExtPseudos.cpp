@@ -92,6 +92,25 @@ static void emitExtForC1Imm(MachineBasicBlock &MBB,
   }
 }
 
+/// Emit ext prefix(es) for an SP-relative byte displacement that exceeds
+/// the scaled imm6 encoding (Class 2 + ext form).  With EXT present the
+/// combined displacement is an UNSIGNED raw byte offset: ext13:imm6
+/// (19 bits) or ext13:ext13:imm6 (32 bits).  The caller places the low
+/// 6 bits in the instruction's imm6 field.
+static void emitExtForSpOffset(MachineBasicBlock &MBB,
+                               MachineBasicBlock::iterator InsertPt,
+                               const DebugLoc &DL, const S1C33InstrInfo &TII,
+                               int64_t Off) {
+  assert(Off >= 64 && "SP-offset pseudo used for an imm6-range offset");
+  if (isUInt<19>(Off)) {
+    BuildMI(MBB, InsertPt, DL, TII.get(S1C33::EXT)).addImm((Off >> 6) & 0x1FFF);
+  } else {
+    BuildMI(MBB, InsertPt, DL, TII.get(S1C33::EXT))
+        .addImm((Off >> 19) & 0x1FFF);
+    BuildMI(MBB, InsertPt, DL, TII.get(S1C33::EXT)).addImm((Off >> 6) & 0x1FFF);
+  }
+}
+
 bool S1C33ExpandExtPseudos::expandMI(MachineBasicBlock &MBB,
                                      MachineBasicBlock::iterator MI,
                                      const S1C33InstrInfo &TII) {
@@ -260,6 +279,65 @@ bool S1C33ExpandExtPseudos::expandMI(MachineBasicBlock &MBB,
       BuildMI(MBB, MI, DL, TII.get(S1C33::EXT)).addImm(ext_imm13);
     }
     BuildMI(MBB, MI, DL, TII.get(RealOpc)).addReg(Rb).addReg(Rs);
+    MI->eraseFromParent();
+    return true;
+  }
+
+  case S1C33::LDB_sp_off:
+  case S1C33::LDUB_sp_off:
+  case S1C33::LDH_sp_off:
+  case S1C33::LDUH_sp_off:
+  case S1C33::LDW_sp_off: {
+    Register Rd = MI->getOperand(0).getReg();
+    int64_t Off = MI->getOperand(1).getImm();
+
+    unsigned RealOpc;
+    switch (MI->getOpcode()) {
+    case S1C33::LDB_sp_off:
+      RealOpc = S1C33::LDB_sp;
+      break;
+    case S1C33::LDUB_sp_off:
+      RealOpc = S1C33::LDUB_sp;
+      break;
+    case S1C33::LDH_sp_off:
+      RealOpc = S1C33::LDH_sp;
+      break;
+    case S1C33::LDUH_sp_off:
+      RealOpc = S1C33::LDUH_sp;
+      break;
+    default:
+      RealOpc = S1C33::LDW_sp;
+      break;
+    }
+    emitExtForSpOffset(MBB, MI, DL, TII, Off);
+    // With EXT present the imm6 field holds the low 6 bits of the raw byte
+    // displacement (not scaled units).
+    BuildMI(MBB, MI, DL, TII.get(RealOpc), Rd).addImm(Off & 0x3F);
+    MI->eraseFromParent();
+    return true;
+  }
+
+  case S1C33::STB_sp_off:
+  case S1C33::STH_sp_off:
+  case S1C33::STW_sp_off: {
+    int64_t Off = MI->getOperand(0).getImm();
+
+    unsigned RealOpc;
+    switch (MI->getOpcode()) {
+    case S1C33::STB_sp_off:
+      RealOpc = S1C33::STB_sp;
+      break;
+    case S1C33::STH_sp_off:
+      RealOpc = S1C33::STH_sp;
+      break;
+    default:
+      RealOpc = S1C33::STW_sp;
+      break;
+    }
+    emitExtForSpOffset(MBB, MI, DL, TII, Off);
+    BuildMI(MBB, MI, DL, TII.get(RealOpc))
+        .addImm(Off & 0x3F)
+        .add(MI->getOperand(1)); // $rs — preserves kill/undef flags
     MI->eraseFromParent();
     return true;
   }

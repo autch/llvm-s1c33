@@ -269,26 +269,51 @@ bool S1C33RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   assert((Offset % Scale) == 0 &&
          "SP-relative offset not aligned to access size");
   int64_t ScaledOffset = Offset / Scale;
-  int64_t EncodedOffset = ScaledOffset;
 
-  // Without EXT the 6-bit field is scaled. Once EXT is present, the combined
-  // displacement is a raw byte offset whose low 6 bits live in the instruction.
+  // Offsets beyond the scaled imm6 range need one or two EXT prefixes whose
+  // combined value is a raw byte displacement.  Do NOT emit the EXTs here:
+  // eliminateFrameIndex runs before the post-RA scheduler, and a bare EXT
+  // carries no dependency edges tying it to its target instruction, so the
+  // scheduler could separate the pair.  Switch to the *_sp_off pseudo
+  // instead, which carries the full byte offset through scheduling as a
+  // single instruction; ExpandExtPseudos splits it after all scheduling.
   if (!isUInt<6>(ScaledOffset)) {
-    EncodedOffset = Offset;
-    if (isUInt<19>(EncodedOffset)) {
-      int64_t ext_imm13 = (EncodedOffset >> 6) & 0x1FFF;
-      BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext_imm13);
-    } else {
-      int64_t ext2_imm13 = (EncodedOffset >> 6) & 0x1FFF;
-      int64_t ext1_imm13 = (EncodedOffset >> 19) & 0x1FFF;
-      BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext1_imm13);
-      BuildMI(MBB, II, DL, TII.get(S1C33::EXT)).addImm(ext2_imm13);
+    unsigned SpOffOpc;
+    switch (MI.getOpcode()) {
+    case S1C33::LDB_sp:
+      SpOffOpc = S1C33::LDB_sp_off;
+      break;
+    case S1C33::LDUB_sp:
+      SpOffOpc = S1C33::LDUB_sp_off;
+      break;
+    case S1C33::LDH_sp:
+      SpOffOpc = S1C33::LDH_sp_off;
+      break;
+    case S1C33::LDUH_sp:
+      SpOffOpc = S1C33::LDUH_sp_off;
+      break;
+    case S1C33::LDW_sp:
+      SpOffOpc = S1C33::LDW_sp_off;
+      break;
+    case S1C33::STB_sp:
+      SpOffOpc = S1C33::STB_sp_off;
+      break;
+    case S1C33::STH_sp:
+      SpOffOpc = S1C33::STH_sp_off;
+      break;
+    case S1C33::STW_sp:
+      SpOffOpc = S1C33::STW_sp_off;
+      break;
+    default:
+      llvm_unreachable("unexpected opcode with out-of-range SP offset");
     }
+    MI.setDesc(TII.get(SpOffOpc));
+    MI.getOperand(FIOperandNum).ChangeToImmediate(Offset);
+    return false;
   }
 
-  // Use scaled units for plain imm6, but raw byte displacement once EXT is
-  // present. The low 6 bits must satisfy the access-size alignment.
-  MI.getOperand(FIOperandNum).ChangeToImmediate(EncodedOffset & 0x3F);
+  // Plain imm6: the field is in scaled units (byte offset / access size).
+  MI.getOperand(FIOperandNum).ChangeToImmediate(ScaledOffset);
   return false;
 }
 

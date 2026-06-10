@@ -29,10 +29,10 @@ add_lld_library(lldELF
   Arch/Mips.cpp
   Arch/MipsArchTree.cpp
   Arch/MSP430.cpp
-  Arch/S1C33.cpp
   Arch/PPC.cpp
   Arch/PPC64.cpp
   Arch/RISCV.cpp
+  Arch/S1C33.cpp
   Arch/SPARCV9.cpp
   Arch/SystemZ.cpp
   Arch/X86.cpp

@@ -31,6 +31,20 @@ void SemaS1C33::handleInterruptHandlerAttr(Decl *D, const ParsedAttr &AL) {
   if (!AL.checkExactlyNumArgs(SemaRef, 0))
     return;
 
+  // Interrupt handlers are entered from the trap table, not by `call`:
+  // there are no arguments in R12-R15 and no way to return a value, so the
+  // function must take no parameters and return void.
+  if (hasFunctionProto(D) && getFunctionOrMethodNumParams(D) != 0) {
+    Diag(D->getLocation(), diag::warn_interrupt_signal_attribute_invalid)
+        << /*S1C33*/ 4 << /*interrupt_handler*/ 2 << 0;
+    return;
+  }
+  if (!getFunctionOrMethodResultType(D)->isVoidType()) {
+    Diag(D->getLocation(), diag::warn_interrupt_signal_attribute_invalid)
+        << /*S1C33*/ 4 << /*interrupt_handler*/ 2 << 1;
+    return;
+  }
+
   handleSimpleAttribute<S1C33InterruptHandlerAttr>(*this, D, AL);
 }
 

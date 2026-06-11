@@ -1357,8 +1357,11 @@ void ELFObjectWriter::recordRelocation(const MCFragment &F,
 
   // Convert SymA to an STT_SECTION symbol if it's defined, local, and meets
   // specific conditions, unless it's a .reloc directive, which disables
-  // STT_SECTION adjustment.
-  bool UseSectionSym = SymA && SymA->getBinding() == ELF::STB_LOCAL &&
+  // STT_SECTION adjustment. A local absolute symbol (SecA == nullptr) has no
+  // section symbol to convert to and must be kept as-is; it reaches here when
+  // a relocation specifier prevents the fixup from being folded to a constant
+  // (e.g. `sym = 0x4000000` + `ext sym@ah` on S1C33).
+  bool UseSectionSym = SymA && SecA && SymA->getBinding() == ELF::STB_LOCAL &&
                        !SymA->isUndefined() &&
                        !mc::isRelocRelocation(Fixup.getKind());
   if (UseSectionSym && useSectionSymbol(Target, SymA, Addend, Type)) {

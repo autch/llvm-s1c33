@@ -150,6 +150,15 @@ struct S1C33Operand : public MCParsedAsmOperand {
     auto V = getImmVal();
     return !V || isInt<6>(*V);
   }
+  // PC-relative branch displacement (raw sign8, in halfword units).  Labels
+  // (non-constant expressions) pass and are resolved as fixups; constant
+  // displacements must fit, since they are encoded directly without a fixup.
+  bool isSImm8() const {
+    if (!isImm())
+      return false;
+    auto V = getImmVal();
+    return !V || isInt<8>(*V);
+  }
   bool isUImm10() const {
     if (!isImm())
       return false;
@@ -451,7 +460,7 @@ bool S1C33AsmParser::parseOperandItem(OperandVector &Operands) {
     // GR32 general-purpose register
     MCRegister Reg = MatchRegisterName(Name);
     if (!Reg)
-      return Error(PercentLoc, "unknown register '%" + Name + "'");
+      return Error(PercentLoc, "unknown register name '%" + Name + "'");
     Operands.push_back(S1C33Operand::CreateReg(Reg, PercentLoc, NameEnd));
     return false;
   }
@@ -538,6 +547,10 @@ bool S1C33AsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned & /*Opcode*/,
   case Match_InvalidSImm6:
     return Error(((S1C33Operand &)*Operands[ErrorInfo]).getStartLoc(),
                  "immediate must be an integer in the range [-32, 31]");
+  case Match_InvalidSImm8:
+    return Error(((S1C33Operand &)*Operands[ErrorInfo]).getStartLoc(),
+                 "branch displacement must be an integer in the range "
+                 "[-128, 127] or a symbol");
   case Match_InvalidUImm10:
     return Error(((S1C33Operand &)*Operands[ErrorInfo]).getStartLoc(),
                  "immediate must be an integer in the range [0, 1023]");

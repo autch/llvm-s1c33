@@ -303,6 +303,8 @@ class S1C33InstC5BitOp<bits<3> op1, dag outs, dag ins,
 //   bits[15:13]=110, bits[12:0]=imm13
 //===----------------------------------------------------------------------===//
 
+// Note: def EXT (S1C33InstrInfo.td) overrides the operand to uimm13 so the
+// assembler range-checks it; the uimm13 operand class is not in scope here.
 class S1C33InstExt : S1C33Inst<(outs), (ins i32imm:$imm13),
                                 "ext\t$imm13", [], 0b110> {
   bits<13> imm13;

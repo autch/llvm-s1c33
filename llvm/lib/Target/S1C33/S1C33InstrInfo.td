@@ -86,6 +86,12 @@ def SImm6AsmOperand : AsmOperandClass {
   let RenderMethod = "addImmOperands";
   let DiagnosticType = "InvalidSImm6";
 }
+def SImm8AsmOperand : AsmOperandClass {
+  let Name = "SImm8";
+  let PredicateMethod = "isSImm8";
+  let RenderMethod = "addImmOperands";
+  let DiagnosticType = "InvalidSImm8";
+}
 def UImm10AsmOperand : AsmOperandClass {
   let Name = "UImm10";
   let PredicateMethod = "isUImm10";
@@ -131,10 +137,14 @@ def simm6 : Operand<i32> {
 
 // 8-bit signed PC-relative offset (jp/call/jrXX sign8)
 // Branch target = (instr_addr + 2) + 2*sign8
-// No range check at parse time — resolved as fixup; labels are accepted freely.
+// Labels are accepted freely (resolved as fixup, with relaxation), but
+// constant displacements are range-checked at parse time: the encoder would
+// otherwise silently truncate them to 8 bits (constants bypass the
+// fixup/relaxation path entirely).
 def simm8 : Operand<OtherVT> {
   let OperandType = "OPERAND_PCREL";
   let DecoderMethod = "decodePCRelSimm8Operand";
+  let ParserMatchClass = SImm8AsmOperand;
 }
 
 // 10-bit unsigned immediate (add/sub %sp, imm10); byte count, 0..1023.
@@ -1330,6 +1340,12 @@ let hasSideEffects = 1, Defs = [PSR, ALR, AHR], Uses = [ALR, AHR],
 def EXT : S1C33InstExt {
   let hasSideEffects = 1;
   let SchedRW = [WriteALU];
+  // Use uimm13 (not the class's raw i32imm) so the assembler rejects
+  // out-of-range immediates instead of silently truncating them to 13
+  // bits.  Symbolic operands (ext sym@ah etc.) are still accepted and
+  // resolved as fixups; codegen-built EXTs always carry in-range
+  // constants.
+  let InOperandList = (ins uimm13:$imm13);
 }
 
 //===----------------------------------------------------------------------===//

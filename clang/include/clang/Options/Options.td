@@ -6057,6 +6057,16 @@ def mthumb : Flag<["-"], "mthumb">, Group<m_Group>;
 def mtune_EQ : Joined<["-"], "mtune=">, Group<m_Group>,
   Visibility<[ClangOption, FlangOption]>,
   HelpText<"Only supported on AArch64, PowerPC, RISC-V, SPARC, SystemZ, and X86">;
+def mprintf_EQ : Joined<["-"], "mprintf=">, Group<m_Group>,
+  Visibility<[ClangOption]>,
+  HelpText<"S1C33/P/ECE only: select the picolibc printf variant "
+           "(double, float, long-long, integer, minimal) via a linker "
+           "--defsym alias of vfprintf">;
+def mscanf_EQ : Joined<["-"], "mscanf=">, Group<m_Group>,
+  Visibility<[ClangOption]>,
+  HelpText<"S1C33/P/ECE only: select the picolibc scanf variant "
+           "(double, float, long-long, integer, minimal) via a linker "
+           "--defsym alias of vfscanf">;
 def multi_lib_config : Joined<["-", "--"], "multi-lib-config=">,
   HelpText<"Path to the YAML configuration file to be used for multilib selection">,
   MetaVarName<"<file>">;

@@ -8,7 +8,20 @@
 // PIECE-SAME: "-m" "elf32ls1c33"
 // PIECE-SAME: "crt0.o"
 // PIECE-SAME: "-lclang_rt.builtins-s1c33"
-// PIECE-SAME: "--start-group" "-lcxxrt" "-lpceapi" "-lpceshim" "-lc" "-lm" "--end-group"
+// PIECE-SAME: "--start-group" "-lcxxrt" "-lpceapi" "-lpicortt" "-lpceshim" "-lc" "-lm" "--end-group"
+
+// -mprintf=/-mscanf= select a picolibc printf/scanf variant via a linker
+// --defsym alias of vfprintf/vfscanf, emitted ahead of the libraries.
+// RUN: %clang -### --target=s1c33-none-piece -mprintf=integer -mscanf=float %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=MPRINTF %s
+// MPRINTF: "--defsym=vfprintf=__i_vfprintf"
+// MPRINTF-SAME: "--defsym=vfscanf=__f_vfscanf"
+// MPRINTF-SAME: "-lpicortt"
+
+// An invalid -mprintf= value is rejected.
+// RUN: not %clang -### --target=s1c33-none-piece -mprintf=bogus %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=MPRINTF-BAD %s
+// MPRINTF-BAD: invalid value 'bogus' in '-mprintf=bogus'
 
 // The default linker is ld.lld (inherited from the bare-metal toolchain).
 // RUN: %clang -### --target=s1c33-none-piece %s 2>&1 \

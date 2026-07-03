@@ -32,12 +32,18 @@ using namespace llvm;
 //===----------------------------------------------------------------------===//
 
 static InstructionCost getS1C33ImmMatCost(const APInt &Imm) {
-  int64_t V = Imm.getSExtValue();
-  if (isInt<6>(V))
+  // Use width-safe APInt predicates: getSExtValue() asserts for immediates
+  // with more than 64 significant bits (e.g. i128 constants), which reach here
+  // via ConstantHoisting before the i64/i128 -> i32 type legalization.
+  if (Imm.isSignedIntN(6))
     return 1; // ld.w %rd, imm6
-  if (isInt<19>(V))
+  if (Imm.isSignedIntN(19))
     return 2; // ext imm13 + ld.w %rd, sign6
-  return 3;   // ext + ext + ld.w %rd, sign6
+  if (Imm.isSignedIntN(32))
+    return 3; // ext + ext + ld.w %rd, sign6
+  // Wider than 32 bits: materialized one 32-bit word at a time.
+  unsigned Words = (Imm.getSignificantBits() + 31) / 32;
+  return 3 * Words;
 }
 
 InstructionCost
@@ -55,8 +61,15 @@ InstructionCost S1C33TTIImpl::getIntImmCostInst(unsigned Opcode, unsigned Idx,
   assert(Ty->isIntegerTy() &&
          "getIntImmCost can only estimate cost of materialising integers");
 
+  // All inline immediate forms below fit in at most 19 bits, so nothing wider
+  // than 32 bits can ever be free. Bail early with the materialization cost;
+  // this also keeps i128 constants away from the width-limited APInt accessors
+  // (getSExtValue/getZExtValue assert above 64 significant bits).
+  if (!Imm.isSignedIntN(32))
+    return getS1C33ImmMatCost(Imm);
+
+  // Safe now that the value fits in 32 signed bits.
   int64_t V = Imm.getSExtValue();
-  uint64_t UV = Imm.getZExtValue();
 
   switch (Opcode) {
   case Instruction::GetElementPtr:
@@ -69,7 +82,7 @@ InstructionCost S1C33TTIImpl::getIntImmCostInst(unsigned Opcode, unsigned Idx,
   case Instruction::Sub:
     // ADD/SUB take a 6-bit unsigned immediate inline; with a single ext
     // prefix the 3-operand Class 1 form absorbs up to 13-bit unsigned.
-    if (isUInt<13>(UV))
+    if (Imm.isIntN(13))
       return TTI::TCC_Free;
     return getS1C33ImmMatCost(Imm);
 

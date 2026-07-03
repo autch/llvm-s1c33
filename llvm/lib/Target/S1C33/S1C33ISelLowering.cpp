@@ -113,6 +113,17 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   setLibcallImpl(RTLIB::SHL_I64, RTLIB::impl___ashldi3);
   setLibcallImpl(RTLIB::SRL_I64, RTLIB::impl___lshrdi3);
   setLibcallImpl(RTLIB::SRA_I64, RTLIB::impl___ashrdi3);
+  // 128-bit integer arithmetic — compiler-rt / compiler_builtins (i128 is not a
+  // C33 ABI type, but Rust's core uses it, so the mul/div/rem/shift routines
+  // must resolve). Simple add/sub/and/or/xor and comparisons expand inline.
+  setLibcallImpl(RTLIB::MUL_I128, RTLIB::impl___multi3);
+  setLibcallImpl(RTLIB::SDIV_I128, RTLIB::impl___divti3);
+  setLibcallImpl(RTLIB::UDIV_I128, RTLIB::impl___udivti3);
+  setLibcallImpl(RTLIB::SREM_I128, RTLIB::impl___modti3);
+  setLibcallImpl(RTLIB::UREM_I128, RTLIB::impl___umodti3);
+  setLibcallImpl(RTLIB::SHL_I128, RTLIB::impl___ashlti3);
+  setLibcallImpl(RTLIB::SRL_I128, RTLIB::impl___lshrti3);
+  setLibcallImpl(RTLIB::SRA_I128, RTLIB::impl___ashrti3);
 
   // Floating-point arithmetic — implemented in P/ECE SDK fp.lib.
   setLibcallImpl(RTLIB::ADD_F32, RTLIB::impl___addsf3);
@@ -145,6 +156,28 @@ S1C33TargetLowering::S1C33TargetLowering(const TargetMachine &TM,
   setLibcallImpl(RTLIB::SINTTOFP_I64_F64, RTLIB::impl___floatdidf);
   setLibcallImpl(RTLIB::UINTTOFP_I64_F32, RTLIB::impl___floatundisf);
   setLibcallImpl(RTLIB::UINTTOFP_I64_F64, RTLIB::impl___floatundidf);
+  // 128-bit FP/integer conversions — compiler_builtins (Rust core's float
+  // formatting and parsing convert between f32/f64 and u128/i128).
+  setLibcallImpl(RTLIB::FPTOSINT_F32_I128, RTLIB::impl___fixsfti);
+  setLibcallImpl(RTLIB::FPTOSINT_F64_I128, RTLIB::impl___fixdfti);
+  setLibcallImpl(RTLIB::FPTOUINT_F32_I128, RTLIB::impl___fixunssfti);
+  setLibcallImpl(RTLIB::FPTOUINT_F64_I128, RTLIB::impl___fixunsdfti);
+  setLibcallImpl(RTLIB::SINTTOFP_I128_F32, RTLIB::impl___floattisf);
+  setLibcallImpl(RTLIB::SINTTOFP_I128_F64, RTLIB::impl___floattidf);
+  setLibcallImpl(RTLIB::UINTTOFP_I128_F32, RTLIB::impl___floatuntisf);
+  setLibcallImpl(RTLIB::UINTTOFP_I128_F64, RTLIB::impl___floatuntidf);
+
+  // Floating-point remainder — compiler_builtins / libm fmod.
+  setLibcallImpl(RTLIB::REM_F32, RTLIB::impl_fmodf);
+  setLibcallImpl(RTLIB::REM_F64, RTLIB::impl_fmod);
+  // Fused multiply-add — compiler_builtins / libm fma.
+  setLibcallImpl(RTLIB::FMA_F32, RTLIB::impl_fmaf);
+  setLibcallImpl(RTLIB::FMA_F64, RTLIB::impl_fma);
+  // Checked multiply (SMULO/UMULO) for 64/128-bit — compiler-rt / compiler_builtins.
+  // Without these, LegalizeIntegerTypes falls back to forceExpandWideMUL, whose
+  // inline expansion produces wrongly-typed result halves on this target.
+  setLibcallImpl(RTLIB::MULO_I64, RTLIB::impl___mulodi4);
+  setLibcallImpl(RTLIB::MULO_I128, RTLIB::impl___muloti4);
 
   // Floating-point comparisons — fp.lib (__fcmps/__fcmpd wrappers).
   // LLVM uses __eqsf2 / __unorddf2 etc. as the canonical comparison libcalls.
@@ -548,6 +581,25 @@ SDValue S1C33TargetLowering::LowerFormalArguments(
 //===----------------------------------------------------------------------===//
 // Return value
 //===----------------------------------------------------------------------===//
+
+// The S5U1C33000C ABI only returns values in registers (R10, or R10+R11 for
+// 64-bit). RetCC_S1C33 has a stack fallback, so CheckReturn alone would always
+// succeed; instead we run the return CC and reject any assignment that spilled
+// to the stack. A return value too large for the return registers (e.g. i128,
+// which legalizes to four i32 words) is then demoted by the caller to an sret
+// pointer, matching how aggregates are returned.
+bool S1C33TargetLowering::CanLowerReturn(
+    CallingConv::ID CallConv, MachineFunction &MF, bool IsVarArg,
+    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context,
+    const Type *RetTy) const {
+  SmallVector<CCValAssign, 16> RVLocs;
+  CCState CCInfo(CallConv, IsVarArg, MF, RVLocs, Context);
+  CCInfo.AnalyzeReturn(Outs, RetCC_S1C33);
+  for (const CCValAssign &VA : RVLocs)
+    if (!VA.isRegLoc())
+      return false;
+  return true;
+}
 
 // Lower the return instruction using the S5U1C33000C ABI:
 //   R10 for 32-bit return, R10+R11 for 64-bit.
